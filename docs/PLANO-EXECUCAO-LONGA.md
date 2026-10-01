@@ -41,6 +41,31 @@ Novidades que mudam o jogo: **GPT-6 Astra (03/09)** guarda notas entre janelas d
 
 **Regra de bolso:** sessão contínua enquanto o contexto acumulado ainda é útil; quando não for, **handoff + sessão nova** é mais barato e mais limpo que mais uma compactação.
 
+### 3.1 Como classificar um critério de pronto
+
+Bom critério = **alguém de fora consegue checar sem confiar no agente** e **o agente não consegue cumprir por atalho**.
+
+| Nível | Tipo | Exemplo | Problema |
+|---|---|---|---|
+| **0 — vago** | intenção | "deixar o site bom" | ninguém sabe quando acabou |
+| **1 — subjetivo** | julgamento do próprio agente | "código revisado e limpo" | o agente se autoaprova |
+| **2 — mensurável, mas burlável** | comando ou contagem | "`npm test` com 0 falhas", "20 páginas geradas" | apaga teste, comenta código, gera página vazia |
+| **3 — mensurável e protegido** | comando + trava | "0 falhas **e** ≥ 48 testes **e** `tests/` intocado"; "20 páginas **e** validador aprova cada uma" | **mínimo aceito em execução longa** |
+| **4 — verificação independente** | nível 3 + checagem externa | teste ponta a ponta real, avaliador separado, amostra conferida por humano | quando o erro custa caro |
+
+**Cinco perguntas** (cada "não" derruba o nível):
+1. Dá para checar com um comando (`<comando> → <saída esperada>`)?
+2. A resposta é sim/não, sem "melhorou"?
+3. É impossível cumprir sem fazer o trabalho? Se não, falta trava: contagem mínima, arquivo congelado (hash), validador do conteúdo.
+4. A prova aparece na saída? O avaliador do `/goal` no Claude só lê a conversa.
+5. Cobre **função** (faz o que devia), **regressão** (não quebrou o resto) e **limite** (não mexeu/gastou onde não devia)?
+
+**Sinais de critério ruim:** palavras como "bom", "limpo", "adequado", "completo"; depende de o agente dizer que terminou; só contagem sem checar conteúdo; não diz o que **não** pode mudar; verificação que leva horas (separar teste rápido por ciclo do teste completo no final).
+
+**Exemplo** — "traduzir o guia para inglês": nível 0 é a frase em si; nível 2 é "existe `guia/en/index.html`"; nível 3–4 é "mesmas `<section id>` que o PT (script), nenhum trecho em PT (detecção de idioma), links internos respondem 200, captura de tela conferida".
+
+O `templates/goal.md` já traz as três camadas, a escala e as perguntas.
+
 ## 4. Padrão de arquivos de estado (por execução)
 
 Cada execução longa ganha uma pasta própria dentro do projeto:

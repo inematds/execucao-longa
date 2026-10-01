@@ -36,7 +36,7 @@
   .chip{display:inline-block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--amb);font-weight:600;font-family:Sora}
   nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(12px);background:rgba(12,12,16,.78);border-bottom:1px solid var(--line)}
   nav .wrap{display:flex;align-items:center;gap:22px;height:60px}
-  nav .brand{display:flex;align-items:center;gap:8px;font-family:Sora;font-weight:800;letter-spacing:-.02em;color:var(--amb)}
+  nav .brand{display:flex;align-items:center;gap:8px;white-space:nowrap;flex-shrink:0;font-family:Sora;font-weight:800;letter-spacing:-.02em;color:var(--amb)}
   nav .brand .emoji{font-size:1.25rem}
   nav .sep{color:var(--mut);opacity:.45}
   nav .inema{color:var(--sky);font-weight:600;font-size:.88rem;font-family:Sora}
@@ -44,16 +44,17 @@
   nav .pro{color:var(--pro);font-weight:600;font-size:.88rem;font-family:Sora}
   nav .pro:hover{filter:brightness(1.15)}
   nav .clubpro{display:inline-flex;align-items:center;gap:6px}
-  nav .links{margin-left:auto;display:flex;align-items:center;gap:20px;font-size:.92rem}
-  nav .links a.sec{color:var(--mut)} nav .links a.sec:hover{color:var(--txt)}
+  nav .links{margin-left:auto;display:flex;align-items:center;gap:16px;font-size:.9rem}
+  nav .links a.sec{color:var(--mut);white-space:nowrap} nav .links a.sec:hover{color:var(--txt)}
   .lang{display:inline-flex;gap:2px;font-family:Sora;font-size:.78rem}
   .lang a{color:var(--mut);padding:.2em .45em;border-radius:6px} .lang a.on{color:var(--amb);background:rgba(226,162,59,.12)}
   .tgl{background:var(--bg2);border:1px solid var(--line);color:var(--txt);width:38px;height:38px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem}
   .tgl:hover{border-color:var(--amb)}
   .btn{display:inline-block;background:var(--amb);color:#1a1206;font-weight:600;padding:.6em 1.05em;border-radius:10px;font-family:Sora}
   .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
-  @media(max-width:760px){nav .links a.sec{display:none}}
-  @media(max-width:520px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
+  @media(max-width:1400px){nav .links a.sec[href="#oque"],nav .links a.sec[href="#roadmap"]{display:none}}
+  @media(max-width:1180px){nav .links a.sec{display:none}}
+  @media(max-width:680px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
   .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
   .hero .glow{position:absolute;inset:-40% -20% auto auto;width:70%;height:600px;background:radial-gradient(closest-side,rgba(226,162,59,.22),transparent 70%);pointer-events:none}
   .hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:74px 22px}
@@ -111,6 +112,7 @@
     <a class="sec" href="#oque">O que é</a>
     <a class="sec" href="#fluxo">Como funciona</a>
     <a class="sec" href="#guia">Guia de uso</a>
+    <a class="sec" href="#criterios">Critérios</a>
     <a class="sec" href="#contexto">Contexto e fila</a>
     <a class="sec" href="#novidades">Novidades</a>
     <a class="sec" href="#roadmap">Roadmap</a>
@@ -235,6 +237,30 @@
 <pre><span class="k">python3</span> tools/medicao/cx.py   <span class="c"># 10 maiores sessões do Codex: duração, compactações, tokens</span>
 <span class="k">python3</span> tools/medicao/cc.py   <span class="c"># 5 maiores sessões do Claude Code: cache_read %</span></pre>
   </div></div>
+</div></section>
+
+<section id="criterios"><div class="wrap">
+  <span class="chip">Critério de pronto</span>
+  <h2>Como saber se um critério de sucesso é bom</h2>
+  <p class="sub">Bom critério: alguém de fora consegue checar sem confiar no agente, e o agente não consegue cumprir por atalho. Em execução longa, o mínimo é o nível 3.</p>
+  <div class="grid g3">
+    <div class="card"><h3>0 · Vago</h3><p>"Deixar o site bom". Ninguém sabe quando acabou.</p></div>
+    <div class="card"><h3>1 · Subjetivo</h3><p>"Código revisado e limpo". O agente se autoaprova.</p></div>
+    <div class="card"><h3>2 · Burlável</h3><p>"0 falhas", "20 páginas". Dá para apagar teste ou gerar página vazia.</p></div>
+    <div class="card"><h3>3 · Protegido ✅</h3><p>Comando + trava: "0 falhas <b>e</b> ≥ 48 testes <b>e</b> tests/ intocado". Mínimo aceito.</p></div>
+    <div class="card"><h3>4 · Independente</h3><p>Nível 3 + checagem externa: e2e real, avaliador separado, amostra humana. Quando o erro custa caro.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card"><h3>5 perguntas (cada "não" derruba o nível)</h3>
+    <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+      <li>Dá para checar com um comando (<code>comando → saída esperada</code>)?</li>
+      <li>A resposta é sim/não, sem "melhorou"?</li>
+      <li>É impossível cumprir sem fazer o trabalho? Se não, falta trava: contagem mínima, arquivo congelado, validador.</li>
+      <li>A prova aparece na saída? O avaliador do <code>/goal</code> no Claude só lê a conversa.</li>
+      <li>Cobre <b>função</b> (faz o que devia), <b>regressão</b> (não quebrou o resto) e <b>limite</b> (não mexeu onde não devia)?</li>
+    </ol></div>
+    <div class="card"><h3>Exemplo: "traduzir o guia para inglês"</h3><p>❌ Nível 0: a frase em si. ⚠️ Nível 2: "existe <code>guia/en/index.html</code>". ✅ Nível 3–4: mesmas <code>&lt;section id&gt;</code> que o PT, nenhum trecho em PT, links internos respondem 200, captura de tela conferida.<br><br><b>Sinais de critério ruim:</b> "bom", "limpo", "completo"; depende do agente dizer que terminou; só contagem; não diz o que não pode mudar; verificação que leva horas. O <code>templates/goal.md</code> já traz a escala.</p></div>
+  </div>
 </div></section>
 
 <section id="contexto"><div class="wrap">

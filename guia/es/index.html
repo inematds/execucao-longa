@@ -36,7 +36,7 @@
   .chip{display:inline-block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--amb);font-weight:600;font-family:Sora}
   nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(12px);background:rgba(12,12,16,.78);border-bottom:1px solid var(--line)}
   nav .wrap{display:flex;align-items:center;gap:22px;height:60px}
-  nav .brand{display:flex;align-items:center;gap:8px;font-family:Sora;font-weight:800;letter-spacing:-.02em;color:var(--amb)}
+  nav .brand{display:flex;align-items:center;gap:8px;white-space:nowrap;flex-shrink:0;font-family:Sora;font-weight:800;letter-spacing:-.02em;color:var(--amb)}
   nav .brand .emoji{font-size:1.25rem}
   nav .sep{color:var(--mut);opacity:.45}
   nav .inema{color:var(--sky);font-weight:600;font-size:.88rem;font-family:Sora}
@@ -44,16 +44,17 @@
   nav .pro{color:var(--pro);font-weight:600;font-size:.88rem;font-family:Sora}
   nav .pro:hover{filter:brightness(1.15)}
   nav .clubpro{display:inline-flex;align-items:center;gap:6px}
-  nav .links{margin-left:auto;display:flex;align-items:center;gap:20px;font-size:.92rem}
-  nav .links a.sec{color:var(--mut)} nav .links a.sec:hover{color:var(--txt)}
+  nav .links{margin-left:auto;display:flex;align-items:center;gap:16px;font-size:.9rem}
+  nav .links a.sec{color:var(--mut);white-space:nowrap} nav .links a.sec:hover{color:var(--txt)}
   .lang{display:inline-flex;gap:2px;font-family:Sora;font-size:.78rem}
   .lang a{color:var(--mut);padding:.2em .45em;border-radius:6px} .lang a.on{color:var(--amb);background:rgba(226,162,59,.12)}
   .tgl{background:var(--bg2);border:1px solid var(--line);color:var(--txt);width:38px;height:38px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem}
   .tgl:hover{border-color:var(--amb)}
   .btn{display:inline-block;background:var(--amb);color:#1a1206;font-weight:600;padding:.6em 1.05em;border-radius:10px;font-family:Sora}
   .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
-  @media(max-width:760px){nav .links a.sec{display:none}}
-  @media(max-width:520px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
+  @media(max-width:1400px){nav .links a.sec[href="#oque"],nav .links a.sec[href="#roadmap"]{display:none}}
+  @media(max-width:1180px){nav .links a.sec{display:none}}
+  @media(max-width:680px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
   .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
   .hero .glow{position:absolute;inset:-40% -20% auto auto;width:70%;height:600px;background:radial-gradient(closest-side,rgba(226,162,59,.22),transparent 70%);pointer-events:none}
   .hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:74px 22px}
@@ -111,6 +112,7 @@
     <a class="sec" href="#oque">Qué es</a>
     <a class="sec" href="#fluxo">Cómo funciona</a>
     <a class="sec" href="#guia">Guía de uso</a>
+    <a class="sec" href="#criterios">Criterios</a>
     <a class="sec" href="#contexto">Contexto y cola</a>
     <a class="sec" href="#novidades">Novedades</a>
     <a class="sec" href="#roadmap">Roadmap</a>
@@ -235,6 +237,30 @@
 <pre><span class="k">python3</span> tools/medicao/cx.py   <span class="c"># 10 sesiones más grandes de Codex: duración, compactaciones, tokens</span>
 <span class="k">python3</span> tools/medicao/cc.py   <span class="c"># 5 sesiones más grandes de Claude Code: cache_read %</span></pre>
   </div></div>
+</div></section>
+
+<section id="criterios"><div class="wrap">
+  <span class="chip">Criterio de listo</span>
+  <h2>Cómo saber si un criterio de éxito es bueno</h2>
+  <p class="sub">Un buen criterio lo puede comprobar alguien de fuera sin confiar en el agente, y el agente no puede cumplirlo con un atajo. En ejecuciones largas, el mínimo es el nivel 3.</p>
+  <div class="grid g3">
+    <div class="card"><h3>0 · Vago</h3><p>"Dejar el sitio bien". Nadie sabe cuándo terminó.</p></div>
+    <div class="card"><h3>1 · Subjetivo</h3><p>"Código revisado y limpio". El agente se autoaprueba.</p></div>
+    <div class="card"><h3>2 · Burlable</h3><p>"0 fallos", "20 páginas". Puede borrar tests o generar páginas vacías.</p></div>
+    <div class="card"><h3>3 · Protegido ✅</h3><p>Comando + candado: "0 fallos <b>y</b> ≥ 48 tests <b>y</b> tests/ intacto". Mínimo aceptado.</p></div>
+    <div class="card"><h3>4 · Independiente</h3><p>Nivel 3 + verificación externa: e2e real, evaluador separado, muestra humana. Cuando el error cuesta caro.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card"><h3>5 preguntas (cada "no" baja el nivel)</h3>
+    <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+      <li>¿Se puede comprobar con un comando (<code>comando → salida esperada</code>)?</li>
+      <li>¿La respuesta es sí/no, sin "mejoró"?</li>
+      <li>¿Es imposible cumplirlo sin hacer el trabajo? Si no, falta un candado: conteo mínimo, archivo congelado, validador.</li>
+      <li>¿La prueba aparece en la salida? El evaluador del <code>/goal</code> en Claude solo lee la conversación.</li>
+      <li>¿Cubre <b>función</b> (hace lo que debía), <b>regresión</b> (no rompió el resto) y <b>límite</b> (no tocó lo que no debía)?</li>
+    </ol></div>
+    <div class="card"><h3>Ejemplo: "traducir la guía al inglés"</h3><p>❌ Nivel 0: la frase en sí. ⚠️ Nivel 2: "existe <code>guia/en/index.html</code>". ✅ Nivel 3–4: mismas <code>&lt;section id&gt;</code> que el PT, nada en portugués, enlaces internos responden 200, captura de pantalla revisada.<br><br><b>Señales de criterio malo:</b> "bueno", "limpio", "completo"; depende de que el agente diga que terminó; solo conteo; no dice qué no puede cambiar; verificación que tarda horas. El <code>templates/goal.md</code> ya trae la escala.</p></div>
+  </div>
 </div></section>
 
 <section id="contexto"><div class="wrap">
