@@ -10,3 +10,4 @@ Repo de documentação/plano sobre execuções longas de agentes. Conta GitHub: 
 When I correct you, or you catch yourself making a mistake: before continuing, add the lesson as a one-line rule under ## Lessons, so it never happens again.
 
 ## Lessons
+- Antes de contestar um número (TTL, preço, multiplicador), conferir primeiro as pesquisas do próprio repo em `docs/` — não opinar de memória.

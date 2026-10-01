@@ -1,6 +1,6 @@
 # Plano — como usar execuções longas (Codex + Claude Code)
 
-Data: 01/10/2026. Base: material de origem (`docs/origem/`) e pesquisa web (`docs/pesquisa-web-2026-10.md`).
+Data: 01/10/2026. Base: material de origem (`docs/origem/`), pesquisa web (`docs/pesquisa-web-2026-10.md`) e pesquisa sobre `/goal`, deterioração de contexto, cache e modo fila (`docs/pesquisa-goal-contexto-fila-2026-10.md`).
 
 ---
 
@@ -21,6 +21,8 @@ OBJETIVO → ESTADO → EXECUTA → TESTA → OBSERVA → CORRIGE → SALVA ESTA
 | Sessão de 11 dias / 573 turnos / 1,3 GB | **Sem fonte pública.** Plausível: há issues do Codex com logs de sessão de 0,7–2 GB, quase todo o volume é saída de ferramenta regravada a cada compactação. |
 | Seis arquivos (`goal/plan/state/progress/failures/decisions.md`) | **Não é padrão oficial.** OpenAI usa um `PLANS.md` (ExecPlan) com seções Progress / Surprises / Decision Log / Outcomes. Anthropic usa `PROGRESS.md` + `feature_list.json` + `init.sh` + git. Os seis arquivos são a mesma ideia, separada. Adotamos os seis (§4) porque cada um tem um leitor diferente. |
 | "Mantenha o cache ativo" | O cache funciona sozinho enquanto o prefixo não muda (hit típico > 95% em sessões contínuas). Compactação troca o prefixo e baixa o hit logo depois — é esperado; o que importa é o custo total. |
+| (relato da comunidade) "`/goal` funciona, mas deteriora o contexto" | **Procede, com nuance.** O `/goal` não causa a deterioração; a sessão longa com compactações repetidas causa. O objetivo sobrevive, mas se perde o "o que já está feito / o que falta" e o agente não converge (issue openai/codex #34095). Remédio: estado em arquivo relido após cada compactação, compactar cedo, contar compactações (§6.7). |
+| (relato da comunidade) Cache cai em ~30 min; perder custa até 20x | **Confere.** OpenAI: TTL de 30 min; Claude: 5 min ou 1 h. Perder o cache custa 12,5x–20x (Claude) e até 25x (GPT-6.1 Sol). Ver §6.8. |
 | (não citado) Claude Code também tem `/goal` | **Sim**, desde mai/2026: um modelo pequeno avalia a condição após cada turno (Stop hook). Mais `/loop`, background agents, workflows e routines. |
 
 Novidades que mudam o jogo: **GPT-6 Astra (03/09)** guarda notas entre janelas de contexto em vez de resumir num bloco, e **Claude Opus 5.5 (22/09)** baixou a leitura de cache para US$0,20/MTok com 1M de contexto. Os dois tornam sessões longas mais baratas e menos amnésicas — mas não dispensam o estado em arquivo.
@@ -80,13 +82,23 @@ Cada execução longa ganha uma pasta própria dentro do projeto:
 - **Routines / `/schedule`** (nuvem): rodam fora da máquina — avaliar antes o que elas acessam.
 - `claude -p` em cron: sempre com `timeout`, `flock` e `--max-turns`.
 
-### 5.4 Qual escolher
+### 5.4 Modo fila — orquestrador + backlog
+Em vez de um objetivo único, uma **fila de tarefas** que pode crescer; o orquestrador pega a próxima, despacha (sessão curta, subagente ou `codex exec`), confere e fecha. **Critério de parada: nenhuma tarefa aberta.** É o padrão do Symphony (OpenAI), que usa o Linear como painel de controle.
+
+- **Fila local primeiro**: `longrun/<execução>/tasks/NNN-slug.md`, uma tarefa por arquivo, com `status: aberta|andamento|feita|bloqueada`, critério de pronto e campo `evidencia:`. Linear ou GitHub Issues só depois, com **autorização explícita** de uso do MCP/API.
+- **Fechar exige evidência**: saída do teste, arquivo gerado ou hash de commit no campo `evidencia:`. Sem evidência a tarefa volta para `aberta` — senão "fechar sem fazer" vira o atalho para cumprir o critério.
+- **Fila com fim**: o agente pode criar no máximo N tarefas por execução (padrão 5); acima disso, a tarefa nova entra como `proposta` e espera aprovação humana.
+- **Desligamento explícito**: fila vazia → orquestrador encerra workers, registra o fechamento em `progress.md` e para. Tarefa `bloqueada` 2 vezes → sai da fila e vai para `failures.md`.
+- **Bônus contra deterioração**: cada tarefa é uma sessão curta; o contexto longo fica só no orquestrador, que lê arquivos, não históricos.
+
+### 5.5 Qual escolher
 | Situação | Ferramenta |
 |---|---|
 | Um objetivo grande, interativo, horas/dias | Codex TUI `/goal` (ou Claude `/goal`) |
 | Lote repetitivo noturno | script + `codex exec`/`claude -p` com `timeout` + `flock` + `--max-turns` |
 | Várias partes independentes ao mesmo tempo | Claude workflow / background agents |
 | Esperar algo externo terminar | `/loop` dinâmico ou timer do systemd |
+| Backlog que cresce, várias tarefas pequenas | Modo fila (§5.4) |
 | Rodar todo dia sem a máquina ligada | routine na nuvem |
 
 ## 6. Guardrails (obrigatórios em toda execução longa)
@@ -97,13 +109,15 @@ Cada execução longa ganha uma pasta própria dentro do projeto:
 4. **Processos**: não usar `pkill -f <padrão>` no mesmo comando que contém o padrão (mata o próprio shell); laços `pgrep` em arquivo de script.
 5. **Saída de ferramenta curta**: é ela que incha o JSONL e o contexto. Gravar logs em arquivo e ler trechos (`tail -50`).
 6. **Validar na prática** (abrir a página, rodar o script, medir) — não declarar pronto pela leitura do código.
+7. **Deterioração de contexto** (vale para `/goal` no Codex e no Claude): compactar manualmente por volta de 60–80% em vez de esperar o automático a ~95%; após toda compactação, reler `state.md` e continuar do primeiro item pendente; **3ª compactação na mesma sessão = alerta** → avaliar handoff + sessão nova. Sinal de que degradou: o agente repete o mesmo plano de fechamento sem fechar, ou reabre item já feito.
+8. **Espera entre ciclos × cache**: se o orquestrador dorme entre ciclos, o intervalo fica **abaixo do TTL do cache** (OpenAI 30 min → acordar a cada ~25 min; Claude 1 h → ~55 min; Claude 5 min → não tentar). Acordar só para manter o cache compensa se houver trabalho previsto nas próximas horas (equilíbrio ≈ escrita ÷ leitura: ~12 a 25 acordadas); para pausas longas, deixar expirar ou fazer handoff. Pela assinatura o custo é cota, mas a conta é a mesma.
 
 ## 7. Observação e métricas
 
 Por execução, registrar no `progress.md`:
 - turnos, compactações, duração de parede;
 - input / cached / output tokens e **cache ratio = cached ÷ input**;
-- tamanho do JSONL e quanto é saída de ferramenta;
+- tamanho do JSONL e quanto é saída de ferramenta (métrica de diagnóstico, não limite: o arquivo grande não trava nada; o que pesa é o contexto);
 - erros e retrabalho (linhas em `failures.md`);
 - critério de pronto: atingido? em quanto tempo?
 
@@ -120,4 +134,4 @@ Scripts para extrair isso dos JSONL do Codex (`~/.codex/sessions`) e do Claude C
 | **F4 — rede de segurança** | `timeout` + `flock` + `--max-turns` nos jobs agendados com agente; hook antes de compactar/encerrar lembrando de salvar `state.md` | job travado não sobrepõe; hook dispara num teste |
 | **F5 — vigia de agente** | Watchdog que avisa quando um goal fica bloqueado/sem cota ou a sessão para de gerar eventos por X min | alerta chega num teste forçado |
 | **F6 — higiene** | Arquivar/comprimir sessões antigas (> 90 dias) | espaço liberado, nada ativo perdido |
-| **F7 — experimento "até onde vai"** | Uma sessão contínua por dias medindo qualidade × cache × compactação × custo | curva por turno e ponto de corte recomendado |
+| **F7 — experimento "até onde vai"** | Uma sessão contínua por dias medindo qualidade × cache × compactação × custo; **comparar com o mesmo trabalho em modo fila** (§5.4) | curva por turno, ponto de corte recomendado e qual modo convergiu melhor |
