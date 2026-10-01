@@ -1,0 +1,9 @@
+{"type":"user","timestamp":"2026-09-02T08:00:00.000Z","message":{"role":"user","content":"oi"}}
+{"type":"assistant","timestamp":"2026-09-02T08:00:05.000Z","message":{"id":"msg_1","model":"claude-opus-5-5","role":"assistant","content":[{"type":"text","text":"a"}],"usage":{"input_tokens":10,"cache_read_input_tokens":0,"cache_creation_input_tokens":990,"output_tokens":20}}}
+{"type":"assistant","timestamp":"2026-09-02T08:00:06.000Z","message":{"id":"msg_1","model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}],"usage":{"input_tokens":10,"cache_read_input_tokens":0,"cache_creation_input_tokens":990,"output_tokens":25}}}
+{"type":"user","timestamp":"2026-09-02T08:00:07.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"saida"}]}}
+{"type":"system","subtype":"compact_boundary","timestamp":"2026-09-02T09:00:00.000Z"}
+{quebrado
+{"type":"assistant","timestamp":"2026-09-02T09:00:10.000Z","message":{"id":"msg_2","model":"claude-sonnet-5-5","role":"assistant","content":[{"type":"text","text":"b"}],"usage":{"input_tokens":5,"cache_read_input_tokens":900,"cache_creation_input_tokens":95,"output_tokens":30}}}
+{"type":"user","timestamp":"2026-09-02T09:00:11.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":[{"type":"text","text":"ok"}]}]}}
+{"type":"assistant","timestamp":"2026-09-02T10:00:00.000Z","message":{"id":"msg_3","model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"c"}]}}

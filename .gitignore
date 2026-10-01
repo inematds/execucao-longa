@@ -1,2 +1,8 @@
 docs-local/
 *.codex.log
+longrun/*/loop.log
+longrun/*/ciclo-*.log
+longrun/*/teste-final.log
+longrun/*/.loop.lock
+__pycache__/
+.pytest_cache/
