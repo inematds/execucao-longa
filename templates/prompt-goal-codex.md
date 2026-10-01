@@ -6,8 +6,8 @@ VERIFICAÇÃO (só termina quando todos passarem):
 
 RESTRIÇÕES: <o que não pode>. Uso só pela assinatura; nenhuma API sem autorização.
 
-ESTADO: use longrun/<pasta>/ (goal.md, plan.md, state.md, progress.md, failures.md, decisions.md).
-Após qualquer compactação ou retomada, releia goal.md, state.md e plan.md antes de agir.
+ESTADO: use longrun/<pasta>/ (goal.md, plan.md, state.md, progress.md, failures.md, decisions.md, canal.md).
+Após qualquer compactação ou retomada, releia goal.md, state.md, plan.md e canal.md antes de agir. Registre no canal.md (só acrescentar) fatos, aprendizados, glossário e armadilhas assim que surgirem.
 
 CICLO: analisar → escolher a próxima ação útil → executar → testar → observar → corrigir → atualizar state/progress → commit no checkpoint → continuar.
 Enquanto existir uma próxima ação objetiva, segura e alinhada ao objetivo, execute-a sem esperar nova instrução.

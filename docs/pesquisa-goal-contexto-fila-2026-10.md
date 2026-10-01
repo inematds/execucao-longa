@@ -88,6 +88,14 @@ Ponto de partida: um relato da comunidade com três ideias — (1) JSONL de 3 GB
 
 ---
 
+## 5. Alerta por faixa de contexto, "canal de sessão" e busca no histórico [COMUNIDADE, relato]
+
+- **Alertas por faixa**: hooks que medem o uso do contexto e injetam no agente um aviso com uma proposta de ação por faixa — o agente passa a "saber" quanto contexto resta. A % pode vir do mesmo cálculo do statusline. Adotado no plano (guardrail 7) com faixas 50/70/85%; no teste real, o aviso chega uma chamada de ferramenta depois, porque a transcrição é gravada com atraso.
+- **Canal de sessão**: um arquivo de texto que só cresce, com o que orientaria o orquestrador — aprendizados, fatos, glossário — capturado **cedo**, funcionando como uma "instrução de compactação" do projeto. Adotado como `canal.md` na pasta `longrun/`. É a mesma ideia das notas entre janelas do GPT-6 Astra.
+- **Busca em todas as transcrições** ("RECALL"): base local com busca rápida sobre tudo o que foi conversado com qualquer modelo, em qualquer máquina, preservada mesmo quando as sessões são apagadas. Não adotado ainda: sobrepõe-se ao `claude-mem` já instalado (que precisa de checagem). Achado relacionado: o Claude Code apagava as transcrições após 30 dias (`cleanupPeriodDays` padrão); nesta máquina passou para 365.
+
+---
+
 ## Fontes
 
 - openai/codex issue #34095 — *Repeated auto-compaction degrades execution frontier and prevents convergence in long tasks*: https://github.com/openai/codex/issues/34095

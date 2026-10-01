@@ -13,7 +13,7 @@ A kit to keep an agent (Codex `/goal` or Claude Code `/goal`) working for hours 
 **1. Create the run folder in your project**
 ```bash
 ~/projetos/execucao-longa/tools/novo-longrun.sh ~/projetos/my-project my-goal
-# → my-project/longrun/2026-10-01-my-goal/ with goal, plan, state, progress, failures, decisions
+# → my-project/longrun/2026-10-01-my-goal/ with goal, plan, state, progress, failures, decisions and canal (notes on what compaction loses)
 ```
 
 **2. Fill in `goal.md`** — the outcome in one sentence + criteria as `command → expected output`, covering:
@@ -41,7 +41,7 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <session.jsonl> --json -
 
 1. Clone into `~/projetos/execucao-longa`.
 2. Paste [`templates/AGENTS-long-run.md`](templates/AGENTS-long-run.md) into your global `CLAUDE.md` and `AGENTS.md` — the agent follows the method without being reminded.
-3. In `~/.claude/settings.json`, hook `tools/hook-longrun.sh` to `PreCompact` and `SessionStart` (matcher `compact|resume`): after compacting or resuming, the agent is told to reread its state.
+3. In `~/.claude/settings.json`, hook `tools/hook-longrun.sh` to `PreCompact`, `SessionStart` (matcher `compact|resume`), `PostToolUse` and `UserPromptSubmit`. It warns the agent by **context band**: ~50% → note things in `canal.md`; ~70% → update state and `/compact`; ~85% → `/session-handoff` + fresh session + `/prime`. It also says to reread state after compacting or resuming. And set `"cleanupPeriodDays": 365` (the 30-day default deletes transcripts).
 4. Watchdog: copy `tools/systemd/longrun-vigia.*` to `~/.config/systemd/user/` and run `systemctl --user enable --now longrun-vigia.timer` (alerts on stopped or idle runs).
 5. Cron jobs that call agents: `flock -n <lock> timeout <cap> <script>`.
 
@@ -62,7 +62,7 @@ Many small tasks and a growing backlog? Use **queue mode** (plan §5.4).
 | [`tools/novo-longrun.sh`](tools/novo-longrun.sh) | Creates a run's `longrun/` folder from the templates |
 | [`tools/loop-longrun.sh`](tools/loop-longrun.sh) | Headless loop: `codex exec` cycles with flock, timeout and memory cap; the test decides; stops on stagnation |
 | [`tools/medir-sessao.py`](tools/medir-sessao.py) | Measures a session (Codex or Claude): duration, compactions, tokens, cache, tool output, per-turn curve |
-| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Claude Code hook: reminds to save before compacting and to reread afterwards |
+| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Claude Code hook: context bands (50/70/85%) with a proposed action, save before compacting, reread afterwards |
 | [`tools/vigia.py`](tools/vigia.py) | Watchdog (timer every 10 min): flags runs that stopped, stopped silently or went idle |
 | [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Hygiene: report on space used by old sessions; `--aplicar` compresses, `--restaurar` restores |
 | [`templates/`](templates/) | `goal.md` (with the criteria scale), `state/plan/progress/failures/decisions.md`, `/goal` prompts and the LONG-RUN snippet for `AGENTS.md`/`CLAUDE.md` |

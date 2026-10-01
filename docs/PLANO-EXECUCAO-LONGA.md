@@ -78,7 +78,10 @@ Cada execução longa ganha uma pasta própria dentro do projeto:
   progress.md    checkpoints com data/hora + hash do commit (só acrescenta)
   failures.md    erro → tentativa → resultado (só acrescenta)
   decisions.md   decisão → motivo → alternativa descartada (só acrescenta)
+  canal.md       conhecimento do projeto que a compactação perde: fatos, aprendizados, glossário, armadilhas (só acrescenta)
 ```
+
+Os seis primeiros guardam a **tarefa**; o `canal.md` guarda o **contexto** (o que orientaria alguém que chegasse agora). Ele é preenchido cedo — o hook pede isso na faixa de ~50% do contexto — para não depender do resumo da compactação.
 
 - Modelos prontos em `templates/`; prompts de partida em `templates/prompt-goal-*.md`.
 - Ao terminar: a menor correção de cada falha vai para o registro de falhas do projeto e o resumo vira um handoff para a próxima sessão.
@@ -135,7 +138,11 @@ Em vez de um objetivo único, uma **fila de tarefas** que pode crescer; o orques
 4. **Processos**: não usar `pkill -f <padrão>` no mesmo comando que contém o padrão (mata o próprio shell); laços `pgrep` em arquivo de script.
 5. **Saída de ferramenta curta**: é ela que incha o JSONL e o contexto. Gravar logs em arquivo e ler trechos (`tail -50`).
 6. **Validar na prática** (abrir a página, rodar o script, medir) — não declarar pronto pela leitura do código.
-7. **Deterioração de contexto** (vale para `/goal` no Codex e no Claude): compactar manualmente por volta de 60–80% em vez de esperar o automático a ~95%; após toda compactação, reler `state.md` e continuar do primeiro item pendente; **3ª compactação na mesma sessão = alerta** → avaliar handoff + sessão nova. Sinal de que degradou: o agente repete o mesmo plano de fechamento sem fechar, ou reabre item já feito.
+7. **Deterioração de contexto** (vale para `/goal` no Codex e no Claude): agir por **faixas de uso do contexto**, antes do automático (~90–95%):
+   - **~50%** → acrescentar no `canal.md` o que importa (fatos, aprendizados, glossário, armadilhas);
+   - **~70%** → atualizar `state.md`/`progress.md`, terminar a unidade atual e rodar `/compact`;
+   - **~85% ou 3ª compactação** → `/session-handoff`, sessão nova e `/prime` (ou releitura de `longrun/`).
+   No Claude Code o `tools/hook-longrun.py` mede a % (mesma conta do statusline) e injeta o aviso uma vez por faixa, só com execução longa ativa; o aviso chega uma chamada de ferramenta depois, porque a transcrição é gravada com atraso. No Codex, acompanhar o % em `/status`. Após toda compactação ou retomada, reler goal → state → plan → canal. Sinal de que degradou: o agente repete o mesmo plano de fechamento sem fechar, ou reabre item já feito.
 8. **Espera entre ciclos × cache**: se o orquestrador dorme entre ciclos, o intervalo fica **abaixo do TTL do cache** (OpenAI 30 min → acordar a cada ~25 min; Claude 1 h → ~55 min; Claude 5 min → não tentar). Acordar só para manter o cache compensa se houver trabalho previsto nas próximas horas (equilíbrio ≈ escrita ÷ leitura: ~12 a 25 acordadas); para pausas longas, deixar expirar ou fazer handoff. Pela assinatura o custo é cota, mas a conta é a mesma.
 
 ## 7. Observação e métricas
@@ -149,7 +156,7 @@ Por execução, registrar no `progress.md`:
 
 `python3 tools/medir-sessao.py <sessão.jsonl> [--json] [--por-turno]` extrai tudo isso dos JSONL do Codex (`~/.codex/sessions`) e do Claude Code (`~/.claude/projects`, deduplicando mensagens por id). Lê 1,8 GB em ~9 s. Os scripts crus antigos continuam em `tools/medicao/`.
 
-**Atenção:** o Claude Code apaga as próprias transcrições após 30 dias (`cleanupPeriodDays`). Quem quiser comparar sessões antigas precisa medir antes ou aumentar esse valor.
+**Atenção:** o Claude Code apaga as próprias transcrições após `cleanupPeriodDays` dias (padrão 30). Nesta máquina foi para **365** em 01/10/2026; quem quiser guardar por mais tempo arquiva antes com `tools/arquivar-sessoes.py`.
 
 ## 8. Fases de implantação
 
@@ -159,7 +166,7 @@ Por execução, registrar no `progress.md`:
 | **F1 — piloto** ✅ | Execução longa real em `longrun/2026-10-01-medir-sessao/`: goal nível 3, 14 testes congelados, loop headless com `codex exec` (GPT-6 Astra) | **concluído no 1º ciclo** (3 min, 10 turnos, cache 91%); verificação independente: hash dos testes intacto, sem valores fixos, 14/14 reproduzido, sessão nunca vista confere |
 | **F2 — medição** ✅ | `tools/medir-sessao.py` (entregue pelo piloto) | bate com o oráculo em 2 sessões grandes (1,8 GB Codex e 17 h Claude) + uma terceira não vista |
 | **F3 — regras** ✅ | Bloco de `templates/AGENTS-long-run.md` em `~/.claude/CLAUDE.md` e `~/.codex/AGENTS.md` | sessão nova do Claude e do Codex responde "novo-longrun.sh + nível 3" sem ser lembrada |
-| **F4 — rede de segurança** ✅ | `flock` + `timeout` nos 3 jobs do cron que chamam agente; `--max-turns` no `claude -p` do `resumir.py`; hook `tools/hook-longrun.sh` (PreCompact + SessionStart `compact\|resume`); `compact_prompt` estruturado no Codex | segunda instância sai na hora, timeout mata; numa sessão real com longrun ativo, o aviso chega após `/compact` e após retomar |
+| **F4 — rede de segurança** ✅ | `flock` + `timeout` nos 3 jobs do cron que chamam agente; `--max-turns` no `claude -p` do `resumir.py`; hook `tools/hook-longrun.py` (PreCompact, SessionStart `compact\|resume` e faixas de contexto em PostToolUse/UserPromptSubmit) + `canal.md`; `compact_prompt` estruturado no Codex | segunda instância sai na hora, timeout mata; numa sessão real com longrun ativo, o aviso chega após `/compact`, após retomar e ao cruzar a faixa (o agente escreveu no `canal.md` sozinho) |
 | **F5 — vigia de agente** ✅ | `tools/vigia.py` + timer `longrun-vigia` (a cada 10 min): parado, parado sem aviso (lock solto), ociosa | 5 cenários testados; alerta forçado gravado em `~/.local/state/execucao-longa/alertas.log` + notify-send, sem repetir |
 | **F6 — higiene** 🟡 | `tools/arquivar-sessoes.py` (relatório por padrão; `--aplicar` comprime com conferência sha256; `--restaurar`) | ida e volta sem perda testada; **não aplicado nas sessões reais** (só 0,04 GB > 90 dias; decisão do usuário) |
 | **F7 — até onde vai** 🟡 | Curva retrospectiva em `docs/experimento-f7-retrospectivo-2026-10.md`; protocolo do experimento prospectivo (sessão única × modo fila) | retrospectiva feita (cache não cai com compactações; custo por turno cresce ~5x sem compactar); **prospectivo pendente** |

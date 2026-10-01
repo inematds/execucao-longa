@@ -146,7 +146,7 @@
   <figure style="margin:0 0 26px;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px -30px #000"><img src="assets/banner-grade.jpg" alt="Os seis pilares: /goal, arquivos de estado, ciclo contínuo, guardrails, métricas e fases" loading="lazy" style="width:100%;display:block"></figure>
   <div class="grid g3">
     <div class="card"><h3>🎯 Objetivo verificável</h3><p>O /goal precisa de Resultado, Restrições e Verificação: comandos cuja saída prova que terminou. Nada de "até ficar bom".</p></div>
-    <div class="card"><h3>🗂️ Estado em arquivos</h3><p>goal, plan, state, progress, failures e decisions.md. Após compactar ou retomar, o agente relê os arquivos em vez de depender da memória da conversa.</p></div>
+    <div class="card"><h3>🗂️ Estado em arquivos</h3><p>goal, plan, state, progress, failures e decisions.md guardam a tarefa; canal.md guarda o que a compactação perde (fatos, glossário, armadilhas). Após compactar ou retomar, o agente relê os arquivos em vez de depender da memória da conversa.</p></div>
     <div class="card"><h3>🛡️ Tetos e portões</h3><p>Tempo, tokens e memória com limite. Gasto de crédito, API, produção e ações irreversíveis viram portão humano.</p></div>
   </div>
 </div></section>
@@ -190,12 +190,12 @@
 
   <div class="step"><div class="b">1</div><div>
     <h3>Crie a pasta de estado da execução</h3>
-    <p>Uma pasta por execução, com os seis arquivos.</p>
-<pre><span class="k">execucao-longa/tools/novo-longrun.sh</span> . meu-objetivo   <span class="c"># cria a pasta com os seis arquivos e data no goal.md</span>
+    <p>Uma pasta por execução, com os sete arquivos (os seis de estado + canal.md).</p>
+<pre><span class="k">execucao-longa/tools/novo-longrun.sh</span> . meu-objetivo   <span class="c"># cria a pasta com os sete arquivos e data no goal.md</span>
 
 <span class="c"># ou à mão:</span>
 <span class="k">mkdir -p</span> longrun/2026-10-01-meu-objetivo
-<span class="k">cp</span> execucao-longa/templates/{goal,plan,state,progress,failures,decisions}.md \
+<span class="k">cp</span> execucao-longa/templates/{goal,plan,state,progress,failures,decisions,canal}.md \
    longrun/2026-10-01-meu-objetivo/</pre>
   </div></div>
 
@@ -247,7 +247,7 @@
   <span class="chip">Para começar</span>
   <h2>Como usar tudo isso</h2>
   <p class="sub">Instale uma vez por máquina. Depois, cada objetivo longo segue um de dois caminhos: interativo (você acompanha) ou headless (roda sozinho).</p>
-  <div class="card"><h3>1 · Uma vez por máquina</h3><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li>Clone o repo em <code>~/projetos/execucao-longa</code>.</li><li>Cole <code>templates/AGENTS-long-run.md</code> no <code>CLAUDE.md</code> e no <code>AGENTS.md</code> globais.</li><li>No <code>~/.claude/settings.json</code>, ligue <code>tools/hook-longrun.sh</code> em <b>PreCompact</b> e em <b>SessionStart</b> (matcher <code>compact|resume</code>).</li><li>Ative o vigia: copie <code>tools/systemd/longrun-vigia.*</code> para <code>~/.config/systemd/user/</code> e rode <code>systemctl --user enable --now longrun-vigia.timer</code>.</li><li>Nos crons que chamam agente: <code>flock -n</code> + <code>timeout</code>.</li></ol></div>
+  <div class="card"><h3>1 · Uma vez por máquina</h3><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li>Clone o repo em <code>~/projetos/execucao-longa</code>.</li><li>Cole <code>templates/AGENTS-long-run.md</code> no <code>CLAUDE.md</code> e no <code>AGENTS.md</code> globais.</li><li>No <code>~/.claude/settings.json</code>, ligue <code>tools/hook-longrun.sh</code> em <b>PreCompact</b>, <b>SessionStart</b> (matcher <code>compact|resume</code>), <b>PostToolUse</b> e <b>UserPromptSubmit</b>: ele lembra de salvar antes de compactar, manda reler depois e avisa as faixas de contexto (50/70/85%). Ponha <code>"cleanupPeriodDays": 365</code> para o Claude não apagar as transcrições com 30 dias.</li><li>Ative o vigia: copie <code>tools/systemd/longrun-vigia.*</code> para <code>~/.config/systemd/user/</code> e rode <code>systemctl --user enable --now longrun-vigia.timer</code>.</li><li>Nos crons que chamam agente: <code>flock -n</code> + <code>timeout</code>.</li></ol></div>
   <div class="grid g2" style="margin-top:18px">
     <div class="card"><h3>2A · Interativo — você acompanha</h3><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li><code>tools/novo-longrun.sh &lt;projeto&gt; &lt;slug&gt;</code></li><li>Escreva o <code>goal.md</code> com critérios nível 3.</li><li><code>/goal</code> no Codex ou no Claude Code com o prompt de <code>templates/</code>.</li><li>O hook manda reler o estado depois de compactar ou retomar; o vigia avisa se travar.</li><li>No fim: <code>medir-sessao.py</code> e anote no <code>progress.md</code>.</li></ol></div>
     <div class="card"><h3>2B · Headless — roda sozinho</h3><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li><code>tools/novo-longrun.sh &lt;projeto&gt; &lt;slug&gt;</code></li><li><code>goal.md</code> + testes congelados (o teste é o juiz).</li><li><code>prompt.md</code> + <code>loop.env</code> — copie do exemplo <code>longrun/2026-10-01-medir-sessao/</code>.</li><li><code>tools/loop-longrun.sh &lt;pasta&gt;</code> (num tmux ou em segundo plano).</li><li>Ele para sozinho: concluído, estagnação ou teto. Confira à parte e meça.</li></ol></div>
@@ -285,7 +285,7 @@
   <p class="sub">O <code>/goal</code> funciona, mas sessões com muitas compactações perdem o fio. Detalhes e fontes em <a href="https://github.com/inematds/execucao-longa/blob/main/docs/pesquisa-goal-contexto-fila-2026-10.md" target="_blank" rel="noopener">docs/pesquisa-goal-contexto-fila-2026-10.md</a>.</p>
   <div class="grid g2">
     <div class="card"><h3>🧠 O /goal deteriora?</h3><p>Não é o <code>/goal</code>, é a compactação repetida. O objetivo sobrevive, mas se perde o "o que já está feito / o que falta": o agente repete "vou terminar e commitar", reabre trabalho e não converge (issue openai/codex #34095).</p></div>
-    <div class="card"><h3>🛡️ Como evitar</h3><p>Estado em arquivo relido após toda compactação; compactar à mão entre 60 e 80% em vez de esperar o automático a ~95%; a 3ª compactação na mesma sessão é alerta → handoff + sessão nova; um goal por feature.</p></div>
+    <div class="card"><h3>🛡️ Como evitar</h3><p>Faixas de contexto, antes do automático (~90–95%): <b>~50%</b> → anotar no <code>canal.md</code> fatos, aprendizados e armadilhas; <b>~70%</b> → atualizar o estado e rodar <code>/compact</code>; <b>~85% ou 3ª compactação</b> → <code>/session-handoff</code>, sessão nova e <code>/prime</code>. No Claude Code um hook mede a % e avisa o agente uma vez por faixa. Um goal por feature.</p></div>
     <div class="card"><h3>⏱️ Cache entre ciclos</h3><p>Se o orquestrador dorme entre ciclos, acorde antes do cache expirar: OpenAI 30 min (acordar a cada ~25), Claude 1 h (~55). Perder o cache custa 12,5x a 25x. Acordar só para manter o cache vale se houver trabalho nas próximas horas.</p></div>
     <div class="card"><h3>📋 Modo fila</h3><p>Backlog que cresce: o orquestrador pega a próxima tarefa, despacha numa sessão curta, confere e fecha. Para quando não há tarefa aberta (padrão do Symphony, da OpenAI, sobre o Linear). Comece com fila local em arquivos.</p></div>
   </div>
@@ -307,7 +307,7 @@
     <div class="card"><h3>✅ Confirmado</h3><p><code>/goal</code>, <code>/compact</code>, <code>/resume</code> e <code>/fork</code> existem no Codex (docs oficiais). Goals retomam após limite de uso (20/07) e após reinício do daemon (17/09). O Claude Code tem <code>/goal</code> desde mai/2026, com avaliador após cada turno.</p></div>
     <div class="card"><h3>🆕 Novos modelos</h3><p>GPT-6 Astra (03/09) mantém notas entre janelas de contexto. Claude Opus 5.5 (22/09) tem 1M de contexto e leitura de cache a US$0,20/MTok.</p></div>
     <div class="card"><h3>❓ Sem fonte</h3><p>A sessão de 11 dias / 573 turnos / 1,3 GB não tem fonte pública. É plausível: há relatos de logs de sessão de 0,7 a 2 GB.</p></div>
-    <div class="card"><h3>📐 Não é padrão oficial</h3><p>Os seis arquivos de estado são uma divisão da mesma ideia do <code>PLANS.md</code> (OpenAI) e do <code>PROGRESS.md</code> + git (Anthropic).</p></div>
+    <div class="card"><h3>📐 Não é padrão oficial</h3><p>Os arquivos de estado são uma divisão da mesma ideia do <code>PLANS.md</code> (OpenAI) e do <code>PROGRESS.md</code> + git (Anthropic).</p></div>
   </div>
 </div></section>
 

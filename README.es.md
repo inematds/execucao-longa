@@ -13,7 +13,7 @@ Kit para mantener a un agente (Codex `/goal` o Claude Code `/goal`) trabajando d
 **1. Crea la carpeta de la ejecución en tu proyecto**
 ```bash
 ~/projetos/execucao-longa/tools/novo-longrun.sh ~/projetos/mi-proyecto mi-objetivo
-# → mi-proyecto/longrun/2026-10-01-mi-objetivo/ con goal, plan, state, progress, failures, decisions
+# → mi-proyecto/longrun/2026-10-01-mi-objetivo/ con goal, plan, state, progress, failures, decisions y canal (notas de lo que la compactación pierde)
 ```
 
 **2. Completa el `goal.md`** — el resultado en una frase + criterios con el formato `comando → salida esperada`, cubriendo:
@@ -41,7 +41,7 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl> --json -
 
 1. Clona en `~/projetos/execucao-longa`.
 2. Pega [`templates/AGENTS-long-run.md`](templates/AGENTS-long-run.md) en el `CLAUDE.md` y el `AGENTS.md` globales — el agente sigue el método sin que se lo recuerden.
-3. En `~/.claude/settings.json`, conecta `tools/hook-longrun.sh` a `PreCompact` y a `SessionStart` (matcher `compact|resume`): tras compactar o retomar, se le pide al agente releer el estado.
+3. En `~/.claude/settings.json`, conecta `tools/hook-longrun.sh` a `PreCompact`, `SessionStart` (matcher `compact|resume`), `PostToolUse` y `UserPromptSubmit`. Avisa al agente por **franja de contexto**: ~50% → anotar en `canal.md`; ~70% → actualizar el estado y `/compact`; ~85% → `/session-handoff` + sesión nueva + `/prime`. También pide releer el estado tras compactar o retomar. Y pon `"cleanupPeriodDays": 365` (el valor por defecto de 30 días borra las transcripciones).
 4. Vigía: copia `tools/systemd/longrun-vigia.*` a `~/.config/systemd/user/` y corre `systemctl --user enable --now longrun-vigia.timer` (avisa ejecuciones detenidas u ociosas).
 5. Crons que llaman agentes: `flock -n <lock> timeout <tope> <script>`.
 
@@ -62,7 +62,7 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl> --json -
 | [`tools/novo-longrun.sh`](tools/novo-longrun.sh) | Crea la carpeta `longrun/` de una ejecución a partir de las plantillas |
 | [`tools/loop-longrun.sh`](tools/loop-longrun.sh) | Loop headless: ciclos de `codex exec` con flock, timeout y tope de memoria; el test decide; se detiene por estancamiento |
 | [`tools/medir-sessao.py`](tools/medir-sessao.py) | Mide una sesión (Codex o Claude): duración, compactaciones, tokens, caché, salida de herramientas, curva por turno |
-| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Hook de Claude Code: recuerda guardar antes de compactar y releer después |
+| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Hook de Claude Code: franjas de contexto (50/70/85%) con acción propuesta, guardar antes de compactar y releer después |
 | [`tools/vigia.py`](tools/vigia.py) | Vigía (timer cada 10 min): avisa ejecuciones detenidas, detenidas sin aviso u ociosas |
 | [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Higiene: informe del espacio de las sesiones antiguas; `--aplicar` comprime, `--restaurar` devuelve |
 | [`templates/`](templates/) | `goal.md` (con la escala de criterios), `state/plan/progress/failures/decisions.md`, prompts `/goal` y el fragmento LONG-RUN para `AGENTS.md`/`CLAUDE.md` |
