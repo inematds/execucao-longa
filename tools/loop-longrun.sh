@@ -10,7 +10,9 @@
 #   PROTEGIDOS="tests/ pytest.ini"            # se o agente mexer, é revertido e o ciclo conta como falho
 #   PERMITIDOS="tools/medir-sessao.py"        # o que entra no commit de checkpoint (além da pasta longrun)
 #   MAX_CICLOS=6  MIN_CICLO=20  MEM=8G  ESTAGNACAO=3
-#   AGENTE=codex  MODELO=gpt-6-astra          # AGENTE=claude usa `claude -p --max-turns 60`
+#   AGENTE=codex  MODELO=gpt-6-astra          # AGENTE=claude usa `claude -p --max-turns 60` (ainda não testado)
+# Progresso = nº de testes RÁPIDOS passando. Se o que falta está só no teste final (lento), cada ciclo
+# conta como "sem avanço": ponha esses casos também no teste rápido ou aumente ESTAGNACAO.
 set -uo pipefail
 dir=$(cd "${1:?uso: $0 <pasta-longrun>}" && pwd)
 repo=$(git -C "$dir" rev-parse --show-toplevel)
