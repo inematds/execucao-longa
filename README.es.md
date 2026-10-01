@@ -65,6 +65,8 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl> --json -
 | [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Hook de Claude Code: franjas de contexto (50/70/85%) con acción propuesta, guardar antes de compactar y releer después |
 | [`tools/vigia.py`](tools/vigia.py) | Vigía (timer cada 10 min): avisa ejecuciones detenidas, detenidas sin aviso u ociosas |
 | [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Higiene: informe del espacio de las sesiones antiguas; `--aplicar` comprime, `--restaurar` devuelve |
+| [`tools/recall.py`](tools/recall.py) | Comando `recall`: busca en todo lo dicho con Codex y Claude (índice SQLite FTS5, reindexado cada hora) |
+| [`tools/faxina-claude-mem.py`](tools/faxina-claude-mem.py) | Limpieza de claude-mem con respaldo: cola antigua, sesiones trabadas, logs |
 | [`templates/`](templates/) | `goal.md` (con la escala de criterios), `state/plan/progress/failures/decisions.md`, prompts `/goal` y el fragmento LONG-RUN para `AGENTS.md`/`CLAUDE.md` |
 | [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/) | Ejemplo real: el piloto que construyó `medir-sessao.py` en 1 ciclo |
 | [Plan](docs/PLANO-EXECUCAO-LONGA.md) | El método completo: criterios (§3.1), archivos de estado, recetas, modo cola, guardrails, fases y lecciones del piloto (en portugués) |
@@ -74,4 +76,4 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl> --json -
 | [Investigación: memoria, claude-mem y base de datos](docs/pesquisa-memoria-claude-mem-2026-10.md) | ¿Funciona claude-mem? ¿Sirve para los proyectos? Índice SQLite FTS5 sugerido (recall) — propuesta F8/F9 (en portugués) |
 | [`docs/origem/`](docs/origem/) | Material que originó el proyecto |
 
-Estado: F0–F5 hechas; F6 lista (no aplicada); F7 con curva retrospectiva, experimento prospectivo pendiente. F8–F9 propuestas. Detalles en el §8 del plan.
+Estado: F0–F5 hechas; F6 lista (no aplicada); F7 con curva retrospectiva, experimento prospectivo pendiente. F8 (recall) y F9 (limpieza de claude-mem) hechas. Detalles en el §8 del plan.

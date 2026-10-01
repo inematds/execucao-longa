@@ -65,6 +65,8 @@ Many small tasks and a growing backlog? Use **queue mode** (plan §5.4).
 | [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Claude Code hook: context bands (50/70/85%) with a proposed action, save before compacting, reread afterwards |
 | [`tools/vigia.py`](tools/vigia.py) | Watchdog (timer every 10 min): flags runs that stopped, stopped silently or went idle |
 | [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Hygiene: report on space used by old sessions; `--aplicar` compresses, `--restaurar` restores |
+| [`tools/recall.py`](tools/recall.py) | `recall` command: searches everything said with Codex and Claude (SQLite FTS5 index, reindexed hourly) |
+| [`tools/faxina-claude-mem.py`](tools/faxina-claude-mem.py) | claude-mem cleanup with backup: old queue, stuck sessions, logs |
 | [`templates/`](templates/) | `goal.md` (with the criteria scale), `state/plan/progress/failures/decisions.md`, `/goal` prompts and the LONG-RUN snippet for `AGENTS.md`/`CLAUDE.md` |
 | [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/) | Real example: the pilot that built `medir-sessao.py` in 1 cycle |
 | [Plan](docs/PLANO-EXECUCAO-LONGA.md) | The full method: criteria (§3.1), state files, recipes, queue mode, guardrails, phases and pilot lessons (in Portuguese) |
@@ -74,4 +76,4 @@ Many small tasks and a growing backlog? Use **queue mode** (plan §5.4).
 | [Research: memory, claude-mem and database](docs/pesquisa-memoria-claude-mem-2026-10.md) | Does claude-mem work? Is it useful for the projects? Suggested SQLite FTS5 index (recall) — proposed F8/F9 (in Portuguese) |
 | [`docs/origem/`](docs/origem/) | Source material behind the project |
 
-Status: F0–F5 done; F6 ready (not applied); F7 has the retrospective curve, prospective experiment pending. F8–F9 proposed. Details in §8 of the plan.
+Status: F0–F5 done; F6 ready (not applied); F7 has the retrospective curve, prospective experiment pending. F8 (recall) and F9 (claude-mem cleanup) done. Details in §8 of the plan.

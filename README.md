@@ -65,6 +65,8 @@ Muitas tarefas pequenas e um backlog que cresce? Use o **modo fila** (plano §5.
 | [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Hook do Claude Code: faixas de contexto (50/70/85%) com ação proposta, salvar antes de compactar e reler depois |
 | [`tools/vigia.py`](tools/vigia.py) | Vigia (timer a cada 10 min): avisa execução parada, parada sem aviso ou ociosa |
 | [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Higiene: relatório do espaço das sessões antigas; `--aplicar` comprime, `--restaurar` devolve |
+| [`tools/recall.py`](tools/recall.py) | Comando `recall`: busca em tudo o que foi dito com o Codex e o Claude (índice SQLite FTS5, reindexado de hora em hora) |
+| [`tools/faxina-claude-mem.py`](tools/faxina-claude-mem.py) | Faxina do claude-mem com backup: fila antiga, sessões presas, logs |
 | [`templates/`](templates/) | `goal.md` (com escala de critérios), `state/plan/progress/failures/decisions.md`, prompts `/goal` e o trecho LONG-RUN para `AGENTS.md`/`CLAUDE.md` |
 | [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/) | Exemplo real: o piloto que construiu o `medir-sessao.py` em 1 ciclo |
 | [Plano](docs/PLANO-EXECUCAO-LONGA.md) | O método completo: critérios (§3.1), arquivos de estado, receitas, modo fila, guardrails, fases e lições do piloto |
@@ -74,4 +76,4 @@ Muitas tarefas pequenas e um backlog que cresce? Use o **modo fila** (plano §5.
 | [Pesquisa memória: claude-mem e banco](docs/pesquisa-memoria-claude-mem-2026-10.md) | O claude-mem funciona? Serve para os projetos? Sugestão de índice SQLite FTS5 (recall) — proposta F8/F9 |
 | [`docs/origem/`](docs/origem/) | Material que originou o projeto |
 
-Status: F0–F5 feitas; F6 pronta (não aplicada); F7 com curva retrospectiva, experimento prospectivo pendente. F8–F9 propostas. Detalhes no §8 do plano.
+Status: F0–F5 feitas; F6 pronta (não aplicada); F7 com curva retrospectiva, experimento prospectivo pendente. F8 (recall) e F9 (faxina do claude-mem) feitas. Detalhes no §8 do plano.

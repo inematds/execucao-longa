@@ -45,4 +45,11 @@ Verificação feita em 01/10/2026 nesta máquina, **só leitura**: nada foi alte
 
 ## 4. Status
 
-**Proposta, não implementada.** Entra no plano como F8 (busca no histórico) e F9 (faxina do claude-mem), ambas aguardando decisão do usuário.
+- **F9 aplicada em 01/10/2026** com `tools/faxina-claude-mem.py --aplicar`, depois de testada numa cópia do banco:
+  - backup consistente antes (`~/.claude-mem/backups/claude-mem-20261001-204458-pre-faxina.db`, 657 MB, `quick_check` ok);
+  - **7.904 pendências** com mais de 30 dias removidas e **3.860 sessões** presas marcadas como concluídas. Eram o mesmo conjunto: ~3.850 sessões de lotes automáticos de julho (`yt-pub-lives*`, `inemaclubpromover`, `mkivideos`) que nunca foram resumidas. **Não foram reprocessadas** (custaria ~120 MB de texto pelo Haiku, para memória de baixo valor);
+  - 132 logs comprimidos: de 640 MB para 129 MB;
+  - aviso `CAPTURE_BROKEN` (maio) movido para `backups/`;
+  - depois: integridade ok, 61.910 observações intactas, busca respondendo e captura funcionando (a própria faxina virou observação).
+  - Para desfazer: parar o worker, copiar o backup de volta e descomprimir os logs.
+- **F8 feita em 01/10/2026** por execução longa (`longrun/2026-10-01-recall/`, 1 ciclo de 5 min, 15 testes congelados, conferida à parte): `tools/recall.py`, comando `recall` no PATH, timer de hora em hora. Índice real: 7.219 sessões, 90 mil trechos, 338 MB; indexação inicial 1 min 24 s, incremental 0,2 s, busca 0,02–0,04 s. As sessões internas do claude-mem (`claude-mem-observer`) ficam de fora por serem resumo do resumo.

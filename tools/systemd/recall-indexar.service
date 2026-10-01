@@ -1,0 +1,8 @@
+[Unit]
+Description=Reindexa as transcrições do Codex e do Claude para o recall (execucao-longa F8)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/nmaldaner/projetos/execucao-longa/tools/recall.py indexar
+Nice=10
+TimeoutStartSec=1800

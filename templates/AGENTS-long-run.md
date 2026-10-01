@@ -6,3 +6,4 @@
 - **Faixas de contexto** (no Claude Code o hook avisa uma vez cada; no Codex, acompanhe o % em `/status`): ~50% → registrar no `canal.md`; ~70% → atualizar estado e pedir `/compact`; ~85% ou 3ª compactação → `/session-handoff` + sessão nova + `/prime`.
 - **Headless:** `~/projetos/execucao-longa/tools/loop-longrun.sh <pasta-longrun>` (flock, timeout, MemoryMax, testes protegidos, parada por estagnação). Medir: `tools/medir-sessao.py <jsonl>`.
 - Tetos sempre: timeout, memória (`systemd-run --user --scope -p MemoryMax=`), saída de ferramenta curta.
+- **Histórico:** `recall "termo" [--projeto X] [--fonte codex|claude] [--desde AAAA-MM-DD]` busca em tudo o que já foi dito com o Codex e o Claude nesta máquina (índice reindexado de hora em hora) — use antes de perguntar ao usuário algo que pode já ter sido decidido.

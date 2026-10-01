@@ -79,6 +79,9 @@ def extrair(obj, fonte, projeto):
     return projeto, saida
 
 
+IGNORAR = ('claude-mem-observer',)
+
+
 def candidatos(args):
     vistos = set()
     for fonte, raiz, padrao in [('codex', args.codex, '*.jsonl'),
@@ -88,6 +91,8 @@ def candidatos(args):
         for p in raiz.rglob(padrao):
             origem = fonte or p.relative_to(raiz).parts[0]
             if origem not in ('codex', 'claude') or not p.is_file():
+                continue
+            if any(x in str(p) for x in IGNORAR):  # sessões internas do claude-mem: resumo do resumo
                 continue
             p = p.resolve()
             if p not in vistos:
@@ -100,6 +105,10 @@ def indexar(db, args):
     arquivos = novos = 0
     with sqlite3.connect(db) as conn:
         conn.executescript(SCHEMA)
+        with conn:  # tira do índice o que passou a ser ignorado
+            for x in IGNORAR:
+                conn.execute('DELETE FROM trechos WHERE arquivo LIKE ?', (f'%{x}%',))
+                conn.execute('DELETE FROM arquivos WHERE arquivo LIKE ?', (f'%{x}%',))
         for path, fonte in candidatos(args):
             stat = path.stat()
             anterior = conn.execute('SELECT fonte,tamanho,mtime,posicao,linha,projeto '

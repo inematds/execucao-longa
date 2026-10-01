@@ -1,0 +1,9 @@
+[Unit]
+Description=Reindexa o recall a cada hora
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
