@@ -288,6 +288,7 @@
     <div class="card"><h3>🛡️ Como evitar</h3><p>Faixas de contexto, antes do automático (~90–95%): <b>~50%</b> → anotar no <code>canal.md</code> fatos, aprendizados e armadilhas; <b>~70%</b> → atualizar o estado e rodar <code>/compact</code>; <b>~85% ou 3ª compactação</b> → <code>/session-handoff</code>, sessão nova e <code>/prime</code>. No Claude Code um hook mede a % e avisa o agente uma vez por faixa. Um goal por feature.</p></div>
     <div class="card"><h3>⏱️ Cache entre ciclos</h3><p>Se o orquestrador dorme entre ciclos, acorde antes do cache expirar: OpenAI 30 min (acordar a cada ~25), Claude 1 h (~55). Perder o cache custa 12,5x a 25x. Acordar só para manter o cache vale se houver trabalho nas próximas horas.</p></div>
     <div class="card"><h3>📋 Modo fila</h3><p>Backlog que cresce: o orquestrador pega a próxima tarefa, despacha numa sessão curta, confere e fecha. Para quando não há tarefa aberta (padrão do Symphony, da OpenAI, sobre o Linear). Comece com fila local em arquivos.</p></div>
+    <div class="card"><h3>🔎 Memória entre sessões</h3><p>O claude-mem funciona e serve para lembrar o que já foi feito num projeto, mas só cobre o Claude Code e guarda resumos, não o que foi dito. Para buscar palavra por palavra em tudo (Codex e Claude), a sugestão é um índice SQLite FTS5 próprio. Análise em <a href="https://github.com/inematds/execucao-longa/blob/main/docs/pesquisa-memoria-claude-mem-2026-10.md" target="_blank" rel="noopener">docs/pesquisa-memoria-claude-mem-2026-10.md</a>.</p></div>
   </div>
   <div class="card" style="margin-top:18px"><h3>Regras do modo fila</h3>
     <ul style="margin:8px 0 0;padding-left:20px;line-height:1.7">
@@ -333,6 +334,8 @@
   <div class="phase"><div class="tag">F5 ✓</div><div class="d"><strong>Vigia de agente</strong><span>tools/vigia.py a cada 10 min (timer systemd): avisa execução parada, parada sem aviso ou ociosa.</span></div></div>
   <div class="phase"><div class="tag">F6 ◐</div><div class="d"><strong>Higiene</strong><span>tools/arquivar-sessoes.py pronto e testado (comprime com conferência, restaura); não aplicado — só 0,04 GB tinham mais de 90 dias.</span></div></div>
   <div class="phase"><div class="tag">F7 ◐</div><div class="d"><strong>Experimento "até onde vai"</strong><span>Curva retrospectiva feita: o cache não cai com as compactações; sem compactar, o custo por turno cresce ~5x. Falta o experimento prospectivo sessão única × modo fila.</span></div></div>
+  <div class="phase"><div class="tag">F8 💡</div><div class="d"><strong>Busca no histórico (proposta)</strong><span>Índice SQLite FTS5 das transcrições do Codex e do Claude para achar o que foi dito em qualquer sessão (recall). Aguarda decisão.</span></div></div>
+  <div class="phase"><div class="tag">F9 💡</div><div class="d"><strong>Faxina do claude-mem (proposta)</strong><span>O claude-mem funciona, mas tem 7.907 mensagens pendentes, 3.860 sessões presas e 640 MB de logs. Aguarda decisão.</span></div></div>
 </div></section>
 
 <section id="relacionados"><div class="wrap">

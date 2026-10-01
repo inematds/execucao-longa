@@ -170,6 +170,8 @@ Por execução, registrar no `progress.md`:
 | **F5 — vigia de agente** ✅ | `tools/vigia.py` + timer `longrun-vigia` (a cada 10 min): parado, parado sem aviso (lock solto), ociosa | 5 cenários testados; alerta forçado gravado em `~/.local/state/execucao-longa/alertas.log` + notify-send, sem repetir |
 | **F6 — higiene** 🟡 | `tools/arquivar-sessoes.py` (relatório por padrão; `--aplicar` comprime com conferência sha256; `--restaurar`) | ida e volta sem perda testada; **não aplicado nas sessões reais** (só 0,04 GB > 90 dias; decisão do usuário) |
 | **F7 — até onde vai** 🟡 | Curva retrospectiva em `docs/experimento-f7-retrospectivo-2026-10.md`; protocolo do experimento prospectivo (sessão única × modo fila) | retrospectiva feita (cache não cai com compactações; custo por turno cresce ~5x sem compactar); **prospectivo pendente** |
+| **F8 — busca no histórico** 💡 proposta | `recall`: índice SQLite FTS5 das transcrições cruas do Codex e do Claude (sem saída de ferramenta), incremental, CLI com filtros de projeto, fonte e data — ver `docs/pesquisa-memoria-claude-mem-2026-10.md` | achar uma frase dita em qualquer sessão em < 1 s; continua valendo após arquivar sessões |
+| **F9 — faxina do claude-mem** 💡 proposta | Com backup: tratar 7.907 mensagens pendentes, fechar 3.860 sessões presas, rotacionar 640 MB de logs | fila zerada, sessões fechadas, logs com teto; busca continua respondendo |
 
 ### Lições do piloto (01/10/2026)
 - Com testes congelados e especificação precisa, o agente concluiu em **1 ciclo**: a maior parte do trabalho de uma execução longa é escrever o critério, não esperar.

@@ -71,6 +71,7 @@ Muitas tarefas pequenas e um backlog que cresce? Use o **modo fila** (plano §5.
 | [F7 retrospectiva](docs/experimento-f7-retrospectivo-2026-10.md) | Curva de cache e custo por turno em 3 sessões reais + protocolo do experimento |
 | [Pesquisa jul–out/2026](docs/pesquisa-web-2026-10.md) | O que mudou no Codex, Claude Code e outros, com fontes |
 | [Pesquisa `/goal`, contexto e fila](docs/pesquisa-goal-contexto-fila-2026-10.md) | Deterioração de contexto, cache entre ciclos, modo fila (Symphony/Linear) |
+| [Pesquisa memória: claude-mem e banco](docs/pesquisa-memoria-claude-mem-2026-10.md) | O claude-mem funciona? Serve para os projetos? Sugestão de índice SQLite FTS5 (recall) — proposta F8/F9 |
 | [`docs/origem/`](docs/origem/) | Material que originou o projeto |
 
-Status: F0–F5 feitas; F6 pronta (não aplicada); F7 com curva retrospectiva, experimento prospectivo pendente. Detalhes no §8 do plano.
+Status: F0–F5 feitas; F6 pronta (não aplicada); F7 com curva retrospectiva, experimento prospectivo pendente. F8–F9 propostas. Detalhes no §8 do plano.

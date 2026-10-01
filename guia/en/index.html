@@ -288,6 +288,7 @@
     <div class="card"><h3>🛡️ How to avoid it</h3><p>Context bands, before the automatic one (~90–95%): <b>~50%</b> → note facts, learnings and pitfalls in <code>canal.md</code>; <b>~70%</b> → update state and run <code>/compact</code>; <b>~85% or 3rd compaction</b> → <code>/session-handoff</code>, fresh session and <code>/prime</code>. In Claude Code a hook measures the % and warns the agent once per band. One goal per feature.</p></div>
     <div class="card"><h3>⏱️ Cache between cycles</h3><p>If the orchestrator sleeps between cycles, wake it before the cache expires: OpenAI 30 min (wake every ~25), Claude 1 h (~55). Losing the cache costs 12.5x to 25x. Waking only to keep the cache warm pays off if there is work in the next few hours.</p></div>
     <div class="card"><h3>📋 Queue mode</h3><p>A growing backlog: the orchestrator takes the next task, dispatches it in a short session, checks it and closes it. It stops when no task is open (OpenAI's Symphony pattern, on top of Linear). Start with a local file-based queue.</p></div>
+    <div class="card"><h3>🔎 Memory across sessions</h3><p>claude-mem works and is good for remembering what was already done in a project, but it only covers Claude Code and stores summaries, not what was said. To search word for word across everything (Codex and Claude), the suggestion is a dedicated SQLite FTS5 index. Analysis in <a href="https://github.com/inematds/execucao-longa/blob/main/docs/pesquisa-memoria-claude-mem-2026-10.md" target="_blank" rel="noopener">docs/pesquisa-memoria-claude-mem-2026-10.md</a> (in Portuguese).</p></div>
   </div>
   <div class="card" style="margin-top:18px"><h3>Queue mode rules</h3>
     <ul style="margin:8px 0 0;padding-left:20px;line-height:1.7">
@@ -333,6 +334,8 @@
   <div class="phase"><div class="tag">F5 ✓</div><div class="d"><strong>Agent watchdog</strong><span>tools/vigia.py every 10 min (systemd timer): flags runs that stopped, stopped silently or went idle.</span></div></div>
   <div class="phase"><div class="tag">F6 ◐</div><div class="d"><strong>Hygiene</strong><span>tools/arquivar-sessoes.py ready and tested (compresses with verification, restores); not applied — only 0.04 GB were older than 90 days.</span></div></div>
   <div class="phase"><div class="tag">F7 ◐</div><div class="d"><strong>"How far can it go" experiment</strong><span>Retrospective curve done: cache does not drop with compactions; without compacting, cost per turn grows ~5x. The prospective single-session × queue-mode experiment is pending.</span></div></div>
+  <div class="phase"><div class="tag">F8 💡</div><div class="d"><strong>History search (proposal)</strong><span>SQLite FTS5 index of Codex and Claude transcripts to find what was said in any session (recall). Awaiting decision.</span></div></div>
+  <div class="phase"><div class="tag">F9 💡</div><div class="d"><strong>claude-mem cleanup (proposal)</strong><span>claude-mem works, but has 7,907 pending messages, 3,860 stuck sessions and 640 MB of logs. Awaiting decision.</span></div></div>
 </div></section>
 
 <section id="relacionados"><div class="wrap">

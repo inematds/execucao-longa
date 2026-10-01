@@ -71,6 +71,7 @@ Many small tasks and a growing backlog? Use **queue mode** (plan §5.4).
 | [F7 retrospective](docs/experimento-f7-retrospectivo-2026-10.md) | Cache and cost-per-turn curve on 3 real sessions + experiment protocol (in Portuguese) |
 | [Research Jul–Oct 2026](docs/pesquisa-web-2026-10.md) | What changed in Codex, Claude Code and others, with sources (in Portuguese) |
 | [Research: `/goal`, context and queue](docs/pesquisa-goal-contexto-fila-2026-10.md) | Context rot, cache between cycles, queue mode (Symphony/Linear) (in Portuguese) |
+| [Research: memory, claude-mem and database](docs/pesquisa-memoria-claude-mem-2026-10.md) | Does claude-mem work? Is it useful for the projects? Suggested SQLite FTS5 index (recall) — proposed F8/F9 (in Portuguese) |
 | [`docs/origem/`](docs/origem/) | Source material behind the project |
 
-Status: F0–F5 done; F6 ready (not applied); F7 has the retrospective curve, prospective experiment pending. Details in §8 of the plan.
+Status: F0–F5 done; F6 ready (not applied); F7 has the retrospective curve, prospective experiment pending. F8–F9 proposed. Details in §8 of the plan.

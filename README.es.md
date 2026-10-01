@@ -71,6 +71,7 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl> --json -
 | [F7 retrospectiva](docs/experimento-f7-retrospectivo-2026-10.md) | Curva de caché y costo por turno en 3 sesiones reales + protocolo del experimento (en portugués) |
 | [Investigación jul–oct/2026](docs/pesquisa-web-2026-10.md) | Qué cambió en Codex, Claude Code y otros, con fuentes (en portugués) |
 | [Investigación: `/goal`, contexto y cola](docs/pesquisa-goal-contexto-fila-2026-10.md) | Deterioro de contexto, caché entre ciclos, modo cola (Symphony/Linear) (en portugués) |
+| [Investigación: memoria, claude-mem y base de datos](docs/pesquisa-memoria-claude-mem-2026-10.md) | ¿Funciona claude-mem? ¿Sirve para los proyectos? Índice SQLite FTS5 sugerido (recall) — propuesta F8/F9 (en portugués) |
 | [`docs/origem/`](docs/origem/) | Material que originó el proyecto |
 
-Estado: F0–F5 hechas; F6 lista (no aplicada); F7 con curva retrospectiva, experimento prospectivo pendiente. Detalles en el §8 del plan.
+Estado: F0–F5 hechas; F6 lista (no aplicada); F7 con curva retrospectiva, experimento prospectivo pendiente. F8–F9 propuestas. Detalles en el §8 del plan.
