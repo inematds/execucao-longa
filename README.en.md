@@ -29,11 +29,21 @@ A kit to keep an agent (Codex `/goal` or Claude Code `/goal`) working for hours 
 - the agent keeps saying "I will finish and commit" without finishing, or reopens finished items (context has degraded);
 - 3rd compaction in the same session → handoff + fresh session.
 
-**5. Close and measure** — `state.md` says "done", criteria pass, and:
+**5. Close and measure** — `state.md` says "done", you run the final test yourself, and:
 ```bash
-python3 ~/projetos/execucao-longa/tools/medicao/cx.py   # Codex: duration, compactions, tokens, cache
-python3 ~/projetos/execucao-longa/tools/medicao/cc.py   # Claude Code: cache_read %, duration
+python3 ~/projetos/execucao-longa/tools/medir-sessao.py <session.jsonl>             # duration, compactions, tokens, cache
+python3 ~/projetos/execucao-longa/tools/medir-sessao.py <session.jsonl> --json --por-turno
 ```
+
+**Want it to run on its own?** Instead of step 3, put `prompt.md` + `loop.env` in the folder (copy from [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/)) and run `tools/loop-longrun.sh <folder>`. Each cycle is one capped `codex exec`; the test decides whether to continue, and the loop stops on its own (done, stagnation or cap).
+
+## Install once per machine
+
+1. Clone into `~/projetos/execucao-longa`.
+2. Paste [`templates/AGENTS-long-run.md`](templates/AGENTS-long-run.md) into your global `CLAUDE.md` and `AGENTS.md` — the agent follows the method without being reminded.
+3. In `~/.claude/settings.json`, hook `tools/hook-longrun.sh` to `PreCompact` and `SessionStart` (matcher `compact|resume`): after compacting or resuming, the agent is told to reread its state.
+4. Watchdog: copy `tools/systemd/longrun-vigia.*` to `~/.config/systemd/user/` and run `systemctl --user enable --now longrun-vigia.timer` (alerts on stopped or idle runs).
+5. Cron jobs that call agents: `flock -n <lock> timeout <cap> <script>`.
 
 ## Use when / don't use when
 
@@ -50,11 +60,17 @@ Many small tasks and a growing backlog? Use **queue mode** (plan §5.4).
 | | |
 |---|---|
 | [`tools/novo-longrun.sh`](tools/novo-longrun.sh) | Creates a run's `longrun/` folder from the templates |
+| [`tools/loop-longrun.sh`](tools/loop-longrun.sh) | Headless loop: `codex exec` cycles with flock, timeout and memory cap; the test decides; stops on stagnation |
+| [`tools/medir-sessao.py`](tools/medir-sessao.py) | Measures a session (Codex or Claude): duration, compactions, tokens, cache, tool output, per-turn curve |
+| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Claude Code hook: reminds to save before compacting and to reread afterwards |
+| [`tools/vigia.py`](tools/vigia.py) | Watchdog (timer every 10 min): flags runs that stopped, stopped silently or went idle |
+| [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Hygiene: report on space used by old sessions; `--aplicar` compresses, `--restaurar` restores |
 | [`templates/`](templates/) | `goal.md` (with the criteria scale), `state/plan/progress/failures/decisions.md`, `/goal` prompts and the LONG-RUN snippet for `AGENTS.md`/`CLAUDE.md` |
-| [`tools/medicao/`](tools/medicao/) | Scripts that read session JSONL (Codex and Claude Code): duration, compactions, tokens, cache |
-| [Plan](docs/PLANO-EXECUCAO-LONGA.md) | The full method: criteria (§3.1), state files, recipes per tool, queue mode, guardrails, phases (in Portuguese) |
+| [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/) | Real example: the pilot that built `medir-sessao.py` in 1 cycle |
+| [Plan](docs/PLANO-EXECUCAO-LONGA.md) | The full method: criteria (§3.1), state files, recipes, queue mode, guardrails, phases and pilot lessons (in Portuguese) |
+| [F7 retrospective](docs/experimento-f7-retrospectivo-2026-10.md) | Cache and cost-per-turn curve on 3 real sessions + experiment protocol (in Portuguese) |
 | [Research Jul–Oct 2026](docs/pesquisa-web-2026-10.md) | What changed in Codex, Claude Code and others, with sources (in Portuguese) |
 | [Research: `/goal`, context and queue](docs/pesquisa-goal-contexto-fila-2026-10.md) | Context rot, cache between cycles, queue mode (Symphony/Linear) (in Portuguese) |
 | [`docs/origem/`](docs/origem/) | Source material behind the project |
 
-Status: F0 (method, templates and scripts). Next phases in §8 of the plan.
+Status: F0–F5 done; F6 ready (not applied); F7 has the retrospective curve, prospective experiment pending. Details in §8 of the plan.

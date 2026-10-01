@@ -29,11 +29,21 @@ Kit para deixar um agente (Codex `/goal` ou Claude Code `/goal`) trabalhando por
 - o agente repete "vou terminar e commitar" sem terminar, ou reabre item já feito (contexto degradou);
 - 3ª compactação na mesma sessão → handoff + sessão nova.
 
-**5. Feche e meça** — `state.md` diz "concluído", critérios passam, e:
+**5. Feche e meça** — `state.md` diz "concluído", você roda o teste final por conta própria, e:
 ```bash
-python3 ~/projetos/execucao-longa/tools/medicao/cx.py   # Codex: duração, compactações, tokens, cache
-python3 ~/projetos/execucao-longa/tools/medicao/cc.py   # Claude Code: cache_read %, duração
+python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sessão.jsonl>             # duração, compactações, tokens, cache
+python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sessão.jsonl> --json --por-turno
 ```
+
+**Prefere que rode sozinho?** No lugar do passo 3, ponha `prompt.md` + `loop.env` na pasta (copie de [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/)) e rode `tools/loop-longrun.sh <pasta>`. Cada ciclo é um `codex exec` com teto; quem decide continuar é o teste, e o loop para sozinho (concluído, estagnação ou teto).
+
+## Instalar uma vez por máquina
+
+1. Clone em `~/projetos/execucao-longa`.
+2. Cole [`templates/AGENTS-long-run.md`](templates/AGENTS-long-run.md) no `CLAUDE.md` e no `AGENTS.md` globais — o agente passa a seguir o método sem ser lembrado.
+3. No `~/.claude/settings.json`, ligue `tools/hook-longrun.sh` em `PreCompact` e em `SessionStart` (matcher `compact|resume`): depois de compactar ou retomar, o agente é mandado reler o estado.
+4. Vigia: copie `tools/systemd/longrun-vigia.*` para `~/.config/systemd/user/` e rode `systemctl --user enable --now longrun-vigia.timer` (alerta execução parada ou ociosa).
+5. Crons que chamam agente: `flock -n <lock> timeout <teto> <script>`.
 
 ## Use quando / não use quando
 
@@ -50,11 +60,17 @@ Muitas tarefas pequenas e um backlog que cresce? Use o **modo fila** (plano §5.
 | | |
 |---|---|
 | [`tools/novo-longrun.sh`](tools/novo-longrun.sh) | Cria a pasta `longrun/` de uma execução a partir dos templates |
+| [`tools/loop-longrun.sh`](tools/loop-longrun.sh) | Laço headless: ciclos de `codex exec` com flock, timeout e teto de memória; o teste decide; para por estagnação |
+| [`tools/medir-sessao.py`](tools/medir-sessao.py) | Mede uma sessão (Codex ou Claude): duração, compactações, tokens, cache, saída de ferramenta, curva por turno |
+| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Hook do Claude Code: lembra de salvar antes de compactar e de reler depois |
+| [`tools/vigia.py`](tools/vigia.py) | Vigia (timer a cada 10 min): avisa execução parada, parada sem aviso ou ociosa |
+| [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Higiene: relatório do espaço das sessões antigas; `--aplicar` comprime, `--restaurar` devolve |
 | [`templates/`](templates/) | `goal.md` (com escala de critérios), `state/plan/progress/failures/decisions.md`, prompts `/goal` e o trecho LONG-RUN para `AGENTS.md`/`CLAUDE.md` |
-| [`tools/medicao/`](tools/medicao/) | Scripts que leem os JSONL de sessão (Codex e Claude Code): duração, compactações, tokens, cache |
-| [Plano](docs/PLANO-EXECUCAO-LONGA.md) | O método completo: critérios (§3.1), arquivos de estado, receitas por ferramenta, modo fila, guardrails, fases |
+| [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/) | Exemplo real: o piloto que construiu o `medir-sessao.py` em 1 ciclo |
+| [Plano](docs/PLANO-EXECUCAO-LONGA.md) | O método completo: critérios (§3.1), arquivos de estado, receitas, modo fila, guardrails, fases e lições do piloto |
+| [F7 retrospectiva](docs/experimento-f7-retrospectivo-2026-10.md) | Curva de cache e custo por turno em 3 sessões reais + protocolo do experimento |
 | [Pesquisa jul–out/2026](docs/pesquisa-web-2026-10.md) | O que mudou no Codex, Claude Code e outros, com fontes |
 | [Pesquisa `/goal`, contexto e fila](docs/pesquisa-goal-contexto-fila-2026-10.md) | Deterioração de contexto, cache entre ciclos, modo fila (Symphony/Linear) |
 | [`docs/origem/`](docs/origem/) | Material que originou o projeto |
 
-Status: F0 (método, templates e scripts). Próximas fases no §8 do plano.
+Status: F0–F5 feitas; F6 pronta (não aplicada); F7 com curva retrospectiva, experimento prospectivo pendente. Detalhes no §8 do plano.

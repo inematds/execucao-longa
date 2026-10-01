@@ -131,6 +131,7 @@
       <p class="lead">No se trata de pedirle al agente que "trabaje 10 horas". Se trata de darle un objetivo con una condición de terminado verificable, guardar el estado en archivos y poner límites. Trabaja en ciclos hasta concluir.</p>
       <div class="cta">
         <a class="btn" href="#guia">Empezar la guía</a>
+        <a class="btn ghost" href="#usar">Cómo usarlo todo</a>
         <a class="btn ghost" href="https://github.com/inematds/execucao-longa" target="_blank" rel="noopener">Ver en GitHub</a>
       </div>
     </div>
@@ -227,19 +228,31 @@
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
-    <h3>Lotes sin interfaz: codex exec con límites</h3>
-    <p>stdin cerrado (si no, se queda esperando entrada), timeout, límite de memoria y flock en cron.</p>
-<pre><span class="k">flock -n</span> /tmp/meu-lote.lock \
-  <span class="k">timeout</span> 4h <span class="k">systemd-run</span> --user --scope -p MemoryMax=8G \
-  <span class="k">codex exec</span> -s workspace-write --skip-git-repo-check - &lt; prompt.md</pre>
+    <h3>Sin interfaz: el loop headless</h3>
+    <p>Cada ciclo es un <code>codex exec</code> con stdin cerrado, timeout, tope de memoria y flock. Quien decide seguir es el test: el loop revierte cambios en tests protegidos, hace commit de checkpoint y se detiene por estancamiento.</p>
+<pre><span class="c"># loop.env + prompt.md na pasta (copie de longrun/2026-10-01-medir-sessao/)</span>
+<span class="k">execucao-longa/tools/loop-longrun.sh</span> longrun/2026-10-01-meu-objetivo
+<span class="c"># se detiene solo: CONCLUIDO, 3 ciclos sin avance o tope de ciclos</span></pre>
   </div></div>
 
   <div class="step"><div class="b">6</div><div>
     <h3>Cierre y mida</h3>
-    <p>Registre en progress.md: turnos, compactaciones, tokens y cache ratio. Los scripts de <code>tools/medicao/</code> leen los JSONL.</p>
-<pre><span class="k">python3</span> tools/medicao/cx.py   <span class="c"># 10 sesiones más grandes de Codex: duración, compactaciones, tokens</span>
-<span class="k">python3</span> tools/medicao/cc.py   <span class="c"># 5 sesiones más grandes de Claude Code: cache_read %</span></pre>
+    <p>Compruebe usted mismo (corra el test final, mire el hash de los tests) y registre en progress.md lo que muestra <code>medir-sessao.py</code>: duración, compactaciones, tokens, caché y salida de herramientas.</p>
+<pre><span class="k">python3</span> execucao-longa/tools/medir-sessao.py &lt;sessão.jsonl&gt;              <span class="c"># resumen: duración, compactaciones, caché</span>
+<span class="k">python3</span> execucao-longa/tools/medir-sessao.py &lt;sessão.jsonl&gt; --json --por-turno  <span class="c"># curva por turno</span></pre>
   </div></div>
+</div></section>
+
+<section id="usar"><div class="wrap">
+  <span class="chip">Para empezar</span>
+  <h2>Cómo usarlo todo</h2>
+  <p class="sub">Instálelo una vez por máquina. Después, cada objetivo largo sigue uno de dos caminos: interactivo (usted lo acompaña) o headless (corre solo).</p>
+  <div class="card"><h3>1 · Una vez por máquina</h3><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li>Clone el repo en <code>~/projetos/execucao-longa</code>.</li><li>Pegue <code>templates/AGENTS-long-run.md</code> en el <code>CLAUDE.md</code> y el <code>AGENTS.md</code> globales.</li><li>En <code>~/.claude/settings.json</code>, conecte <code>tools/hook-longrun.sh</code> a <b>PreCompact</b> y a <b>SessionStart</b> (matcher <code>compact|resume</code>).</li><li>Active el vigía: copie <code>tools/systemd/longrun-vigia.*</code> a <code>~/.config/systemd/user/</code> y corra <code>systemctl --user enable --now longrun-vigia.timer</code>.</li><li>En los crons que llaman agentes: <code>flock -n</code> + <code>timeout</code>.</li></ol></div>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card"><h3>2A · Interactivo — usted acompaña</h3><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li><code>tools/novo-longrun.sh &lt;proyecto&gt; &lt;slug&gt;</code></li><li>Escriba el <code>goal.md</code> con criterios nivel 3.</li><li><code>/goal</code> en Codex o Claude Code con el prompt de <code>templates/</code>.</li><li>El hook pide releer el estado tras compactar o retomar; el vigía avisa si se traba.</li><li>Al final: <code>medir-sessao.py</code> y anótelo en <code>progress.md</code>.</li></ol></div>
+    <div class="card"><h3>2B · Headless — corre solo</h3><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li><code>tools/novo-longrun.sh &lt;proyecto&gt; &lt;slug&gt;</code></li><li><code>goal.md</code> + tests congelados (el test es el juez).</li><li><code>prompt.md</code> + <code>loop.env</code> — copie del ejemplo <code>longrun/2026-10-01-medir-sessao/</code>.</li><li><code>tools/loop-longrun.sh &lt;carpeta&gt;</code> (en tmux o en segundo plano).</li><li>Se detiene solo: concluido, estancamiento o tope. Verifique aparte y mida.</li></ol></div>
+  </div>
+  <div class="card" style="margin-top:18px"><h3>Mantenimiento</h3><p>Las alertas del vigía quedan en <code>~/.local/state/execucao-longa/alertas.log</code> (y en notify-send). <code>tools/arquivar-sessoes.py</code> muestra cuánto espacio ocupan las sesiones antiguas; <code>--aplicar</code> las comprime y <code>--restaurar</code> devuelve una. Ejemplo completo de ejecución: <code>longrun/2026-10-01-medir-sessao/</code>.</p></div>
 </div></section>
 
 <section id="criterios"><div class="wrap">
@@ -313,13 +326,13 @@
   <h2>Fases del plan</h2>
   <p class="sub">Detalles en <a href="https://github.com/inematds/execucao-longa/blob/main/docs/PLANO-EXECUCAO-LONGA.md" target="_blank" rel="noopener">docs/PLANO-EXECUCAO-LONGA.md</a> (en portugués).</p>
   <div class="phase"><div class="tag">F0 ✓</div><div class="d"><strong>Documentación y plantillas</strong><span>Material de origen, investigación, plan y plantillas publicados.</span></div></div>
-  <div class="phase"><div class="tag">F1</div><div class="d"><strong>Piloto</strong><span>Una ejecución larga real con /goal y archivos de estado en un proyecto con prueba automática.</span></div></div>
-  <div class="phase"><div class="tag">F2</div><div class="d"><strong>Medición</strong><span>Herramienta única que lee el JSONL y muestra turnos, compactaciones y cache ratio.</span></div></div>
-  <div class="phase"><div class="tag">F3</div><div class="d"><strong>Reglas</strong><span>Bloque LONG-RUN en las instrucciones globales de los agentes.</span></div></div>
-  <div class="phase"><div class="tag">F4</div><div class="d"><strong>Red de seguridad</strong><span>timeout, flock y --max-turns en los jobs programados; hook que guarda el estado antes de compactar.</span></div></div>
-  <div class="phase"><div class="tag">F5</div><div class="d"><strong>Vigía de agente</strong><span>Alerta cuando el goal se traba o la sesión deja de avanzar.</span></div></div>
-  <div class="phase"><div class="tag">F6</div><div class="d"><strong>Higiene</strong><span>Archivar sesiones antiguas, que crecen hasta GB.</span></div></div>
-  <div class="phase"><div class="tag">F7</div><div class="d"><strong>Experimento "hasta dónde llega"</strong><span>Sesión continua durante días midiendo calidad × caché × compactación × costo, comparada con el mismo trabajo en modo cola.</span></div></div>
+  <div class="phase"><div class="tag">F1 ✓</div><div class="d"><strong>Piloto</strong><span>Ejecución larga real (medir-sessao): goal nivel 3, 14 tests congelados, loop headless — concluida en el 1.er ciclo, en 3 min, y verificada aparte.</span></div></div>
+  <div class="phase"><div class="tag">F2 ✓</div><div class="d"><strong>Medición</strong><span>tools/medir-sessao.py: lee 1,8 GB en ~9 s; coincide con el oráculo en 2 sesiones grandes y en una tercera nunca vista.</span></div></div>
+  <div class="phase"><div class="tag">F3 ✓</div><div class="d"><strong>Reglas</strong><span>Bloque de ejecución larga en las instrucciones globales de Claude y Codex; una sesión nueva lo sigue sin que se lo recuerden.</span></div></div>
+  <div class="phase"><div class="tag">F4 ✓</div><div class="d"><strong>Red de seguridad</strong><span>flock + timeout en los crons que llaman agentes, --max-turns, hook que pide releer tras compactar o retomar, resumen de compactación estructurado en Codex.</span></div></div>
+  <div class="phase"><div class="tag">F5 ✓</div><div class="d"><strong>Vigía de agente</strong><span>tools/vigia.py cada 10 min (timer de systemd): avisa ejecuciones detenidas, detenidas sin aviso u ociosas.</span></div></div>
+  <div class="phase"><div class="tag">F6 ◐</div><div class="d"><strong>Higiene</strong><span>tools/arquivar-sessoes.py listo y probado (comprime con verificación, restaura); no aplicado — solo 0,04 GB tenían más de 90 días.</span></div></div>
+  <div class="phase"><div class="tag">F7 ◐</div><div class="d"><strong>Experimento "hasta dónde llega"</strong><span>Curva retrospectiva hecha: la caché no cae con las compactaciones; sin compactar, el costo por turno crece ~5x. Falta el experimento prospectivo sesión única × modo cola.</span></div></div>
 </div></section>
 
 <section id="relacionados"><div class="wrap">

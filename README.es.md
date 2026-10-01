@@ -29,11 +29,21 @@ Kit para mantener a un agente (Codex `/goal` o Claude Code `/goal`) trabajando d
 - el agente repite "voy a terminar y hacer commit" sin terminar, o reabre ítems ya hechos (el contexto se degradó);
 - 3.ª compactación en la misma sesión → handoff + sesión nueva.
 
-**5. Cierra y mide** — `state.md` dice "concluido", los criterios pasan, y:
+**5. Cierra y mide** — `state.md` dice "concluido", corres el test final por tu cuenta, y:
 ```bash
-python3 ~/projetos/execucao-longa/tools/medicao/cx.py   # Codex: duración, compactaciones, tokens, caché
-python3 ~/projetos/execucao-longa/tools/medicao/cc.py   # Claude Code: cache_read %, duración
+python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl>             # duración, compactaciones, tokens, caché
+python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl> --json --por-turno
 ```
+
+**¿Prefieres que corra solo?** En lugar del paso 3, pon `prompt.md` + `loop.env` en la carpeta (copia de [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/)) y corre `tools/loop-longrun.sh <carpeta>`. Cada ciclo es un `codex exec` con tope; el test decide si sigue, y el loop se detiene solo (concluido, estancamiento o tope).
+
+## Instalar una vez por máquina
+
+1. Clona en `~/projetos/execucao-longa`.
+2. Pega [`templates/AGENTS-long-run.md`](templates/AGENTS-long-run.md) en el `CLAUDE.md` y el `AGENTS.md` globales — el agente sigue el método sin que se lo recuerden.
+3. En `~/.claude/settings.json`, conecta `tools/hook-longrun.sh` a `PreCompact` y a `SessionStart` (matcher `compact|resume`): tras compactar o retomar, se le pide al agente releer el estado.
+4. Vigía: copia `tools/systemd/longrun-vigia.*` a `~/.config/systemd/user/` y corre `systemctl --user enable --now longrun-vigia.timer` (avisa ejecuciones detenidas u ociosas).
+5. Crons que llaman agentes: `flock -n <lock> timeout <tope> <script>`.
 
 ## Úsalo cuando / no lo uses cuando
 
@@ -50,11 +60,17 @@ python3 ~/projetos/execucao-longa/tools/medicao/cc.py   # Claude Code: cache_rea
 | | |
 |---|---|
 | [`tools/novo-longrun.sh`](tools/novo-longrun.sh) | Crea la carpeta `longrun/` de una ejecución a partir de las plantillas |
+| [`tools/loop-longrun.sh`](tools/loop-longrun.sh) | Loop headless: ciclos de `codex exec` con flock, timeout y tope de memoria; el test decide; se detiene por estancamiento |
+| [`tools/medir-sessao.py`](tools/medir-sessao.py) | Mide una sesión (Codex o Claude): duración, compactaciones, tokens, caché, salida de herramientas, curva por turno |
+| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Hook de Claude Code: recuerda guardar antes de compactar y releer después |
+| [`tools/vigia.py`](tools/vigia.py) | Vigía (timer cada 10 min): avisa ejecuciones detenidas, detenidas sin aviso u ociosas |
+| [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Higiene: informe del espacio de las sesiones antiguas; `--aplicar` comprime, `--restaurar` devuelve |
 | [`templates/`](templates/) | `goal.md` (con la escala de criterios), `state/plan/progress/failures/decisions.md`, prompts `/goal` y el fragmento LONG-RUN para `AGENTS.md`/`CLAUDE.md` |
-| [`tools/medicao/`](tools/medicao/) | Scripts que leen los JSONL de sesión (Codex y Claude Code): duración, compactaciones, tokens, caché |
-| [Plan](docs/PLANO-EXECUCAO-LONGA.md) | El método completo: criterios (§3.1), archivos de estado, recetas por herramienta, modo cola, guardrails, fases (en portugués) |
+| [`longrun/2026-10-01-medir-sessao/`](longrun/2026-10-01-medir-sessao/) | Ejemplo real: el piloto que construyó `medir-sessao.py` en 1 ciclo |
+| [Plan](docs/PLANO-EXECUCAO-LONGA.md) | El método completo: criterios (§3.1), archivos de estado, recetas, modo cola, guardrails, fases y lecciones del piloto (en portugués) |
+| [F7 retrospectiva](docs/experimento-f7-retrospectivo-2026-10.md) | Curva de caché y costo por turno en 3 sesiones reales + protocolo del experimento (en portugués) |
 | [Investigación jul–oct/2026](docs/pesquisa-web-2026-10.md) | Qué cambió en Codex, Claude Code y otros, con fuentes (en portugués) |
 | [Investigación: `/goal`, contexto y cola](docs/pesquisa-goal-contexto-fila-2026-10.md) | Deterioro de contexto, caché entre ciclos, modo cola (Symphony/Linear) (en portugués) |
 | [`docs/origem/`](docs/origem/) | Material que originó el proyecto |
 
-Estado: F0 (método, plantillas y scripts). Próximas fases en el §8 del plan.
+Estado: F0–F5 hechas; F6 lista (no aplicada); F7 con curva retrospectiva, experimento prospectivo pendiente. Detalles en el §8 del plan.
