@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ejecución Larga — agentes que trabajan horas y días sin perder el rumbo</title>
+<meta name="description" content="Cómo usar ejecuciones largas en Codex (/goal) y en Claude Code: objetivo verificable, archivos de estado, ciclo continuo, guardrails y métricas. Investigación de oct/2026.">
+<link rel="alternate" hreflang="pt-BR" href="https://inematds.github.io/execucao-longa/guia/">
+<link rel="alternate" hreflang="en" href="https://inematds.github.io/execucao-longa/guia/en/">
+<link rel="alternate" hreflang="es" href="https://inematds.github.io/execucao-longa/guia/es/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0c10; --bg2:#14141b; --card:#16161e; --line:#272730;
+    --txt:#e9e9ee; --mut:#9a9aa6; --amb:#E2A23B; --amb2:#f0c070; --sky:#38bdf8; --pro:#cbd5e1;
+    color-scheme:dark;
+  }
+  body.light{
+    --bg:#f6f7f9; --bg2:#eceef2; --card:#ffffff; --line:#e1e3ea;
+    --txt:#1a1a22; --mut:#5b5b68; --amb:#b9791d; --amb2:#a16207; --sky:#0369a1; --pro:#b45309;
+    color-scheme:light;
+  }
+  body.light .hero .glow{opacity:.5}
+  body.light pre{background:#0e0e14;color:#d6d6e0}
+  body.light pre .c{color:#8a8a98}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.65 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:Sora,sans-serif;line-height:1.15;margin:0}
+  a{color:var(--amb);text-decoration:none}
+  code,pre{font-family:"JetBrains Mono",monospace}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 22px}
+  .mut{color:var(--mut)} .amb{color:var(--amb)}
+  .chip{display:inline-block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--amb);font-weight:600;font-family:Sora}
+  nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(12px);background:rgba(12,12,16,.78);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:22px;height:60px}
+  nav .brand{display:flex;align-items:center;gap:8px;font-family:Sora;font-weight:800;letter-spacing:-.02em;color:var(--amb)}
+  nav .brand .emoji{font-size:1.25rem}
+  nav .sep{color:var(--mut);opacity:.45}
+  nav .inema{color:var(--sky);font-weight:600;font-size:.88rem;font-family:Sora}
+  nav .inema:hover{filter:brightness(1.15)}
+  nav .pro{color:var(--pro);font-weight:600;font-size:.88rem;font-family:Sora}
+  nav .pro:hover{filter:brightness(1.15)}
+  nav .clubpro{display:inline-flex;align-items:center;gap:6px}
+  nav .links{margin-left:auto;display:flex;align-items:center;gap:20px;font-size:.92rem}
+  nav .links a.sec{color:var(--mut)} nav .links a.sec:hover{color:var(--txt)}
+  .lang{display:inline-flex;gap:2px;font-family:Sora;font-size:.78rem}
+  .lang a{color:var(--mut);padding:.2em .45em;border-radius:6px} .lang a.on{color:var(--amb);background:rgba(226,162,59,.12)}
+  .tgl{background:var(--bg2);border:1px solid var(--line);color:var(--txt);width:38px;height:38px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem}
+  .tgl:hover{border-color:var(--amb)}
+  .btn{display:inline-block;background:var(--amb);color:#1a1206;font-weight:600;padding:.6em 1.05em;border-radius:10px;font-family:Sora}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  @media(max-width:760px){nav .links a.sec{display:none}}
+  @media(max-width:520px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+  .hero .glow{position:absolute;inset:-40% -20% auto auto;width:70%;height:600px;background:radial-gradient(closest-side,rgba(226,162,59,.22),transparent 70%);pointer-events:none}
+  .hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:74px 22px}
+  .hero h1{font-size:clamp(2.2rem,5vw,3.5rem);font-weight:800;letter-spacing:-.025em}
+  .hero p.lead{font-size:1.18rem;color:var(--mut);margin:1.1em 0 1.6em;max-width:34ch}
+  .hero .cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero figure{margin:0;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px -30px #000}
+  .hero figure img{width:100%;display:block}
+  @media(max-width:780px){.hero .wrap{grid-template-columns:1fr;padding:48px 22px}}
+  section{padding:62px 0;border-bottom:1px solid var(--line)}
+  section h2{font-size:clamp(1.5rem,3.4vw,2.1rem);font-weight:800;letter-spacing:-.02em}
+  section .sub{color:var(--mut);margin:.6em 0 2em;max-width:62ch}
+  .grid{display:grid;gap:16px} .grid>*,.step>div{min-width:0}
+  .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:820px){.g3,.g4{grid-template-columns:1fr 1fr}}
+  @media(max-width:540px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card h3{font-size:1.05rem;margin-bottom:.4em}
+  .card p{color:var(--mut);font-size:.92rem;margin:0}
+  .num{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border-radius:8px;background:rgba(226,162,59,.14);color:var(--amb);font-family:Sora;font-weight:800;font-size:.9rem;margin-bottom:.7em}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  .flow span{background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:.45em .9em;font-size:.85rem;font-family:Sora;font-weight:600}
+  .flow .arr{color:var(--amb);border:none;background:none;padding:0 .1em}
+  pre{background:#0a0a0e;border:1px solid var(--line);border-radius:12px;padding:16px 18px;overflow:auto;font-size:.86rem;line-height:1.6;color:#d6d6e0}
+  pre .c{color:#6f6f7c} pre .k{color:var(--amb2)} pre .s{color:#9ece6a}
+  .step{display:grid;grid-template-columns:46px 1fr;gap:16px;margin-bottom:26px}
+  .step .b{width:46px;height:46px;border-radius:12px;background:var(--amb);color:#1a1206;font-family:Sora;font-weight:800;font-size:1.25rem;display:flex;align-items:center;justify-content:center}
+  .step h3{font-size:1.12rem;margin-bottom:.3em}
+  .step p{color:var(--mut);margin:.2em 0 .7em}
+  .ex{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:680px){.ex{grid-template-columns:1fr}}
+  .ex figure{margin:0;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+  .ex figure img{width:100%;display:block}
+  .ex figcaption{padding:12px 14px;font-size:.88rem;color:var(--mut);background:var(--card)}
+  .phase{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .phase:last-child{border:none}
+  .phase .tag{flex:0 0 92px;font-family:Sora;font-weight:800;color:var(--amb)}
+  .phase .d strong{display:block;margin-bottom:.2em}
+  .phase .d span{color:var(--mut);font-size:.92rem}
+  footer{padding:46px 0;text-align:center;color:var(--mut);font-size:.9rem}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:.3em .8em;font-size:.78rem;color:var(--mut);margin:0 4px}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="brand" href="#top"><span class="emoji">⏳</span> Ejecución Larga</a>
+  <span class="sep">|</span>
+  <span class="clubpro">
+    <a class="inema" href="https://inema.club" target="_blank" rel="noopener">INEMA.CLUB</a>
+    <span class="sep">-</span>
+    <a class="pro" href="https://inema.pro" target="_blank" rel="noopener">PRO</a>
+  </span>
+  <div class="links">
+    <a class="sec" href="#oque">Qué es</a>
+    <a class="sec" href="#fluxo">Cómo funciona</a>
+    <a class="sec" href="#guia">Guía de uso</a>
+    <a class="sec" href="#novidades">Novedades</a>
+    <a class="sec" href="#roadmap">Roadmap</a>
+    <span class="lang"><a href="../">PT</a><a href="../en/">EN</a><a class="on" href="./">ES</a></span>
+    <button class="tgl" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema">🌙</button>
+    <a class="btn" href="https://github.com/inematds/execucao-longa" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div></nav>
+
+<header class="hero" id="top">
+  <div class="glow"></div>
+  <div class="wrap">
+    <div>
+      <span class="chip">Codex /goal · Claude Code /goal · oct/2026</span>
+      <h1>Agentes que trabajan durante horas, en <span class="amb">ejecución larga</span></h1>
+      <p class="lead">No se trata de pedirle al agente que "trabaje 10 horas". Se trata de darle un objetivo con una condición de terminado verificable, guardar el estado en archivos y poner límites. Trabaja en ciclos hasta concluir.</p>
+      <div class="cta">
+        <a class="btn" href="#guia">Empezar la guía</a>
+        <a class="btn ghost" href="https://github.com/inematds/execucao-longa" target="_blank" rel="noopener">Ver en GitHub</a>
+      </div>
+    </div>
+    <figure><img src="../assets/banner-es.jpg" alt="Banner Ejecución Larga: agentes que trabajan horas y días sin perder el rumbo"></figure>
+  </div>
+</header>
+
+<section id="oque"><div class="wrap">
+  <span class="chip">Qué es</span>
+  <h2>Un método + plantillas para ejecuciones largas</h2>
+  <p class="sub">Este repositorio reúne el material de origen sobre la sesión larga en Codex, una investigación de las novedades de jul–oct/2026 con fuentes, un plan de uso y plantillas listas para copiar.</p>
+  <figure style="margin:0 0 26px;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px -30px #000"><img src="../assets/banner-grade-es.jpg" alt="Los seis pilares: /goal, archivos de estado, ciclo continuo, guardrails, métricas y fases" loading="lazy" style="width:100%;display:block"></figure>
+  <div class="grid g3">
+    <div class="card"><h3>🎯 Objetivo verificable</h3><p>El /goal necesita Resultado, Restricciones y Verificación: comandos cuya salida prueba que terminó. Nada de "hasta que quede bien".</p></div>
+    <div class="card"><h3>🗂️ Estado en archivos</h3><p>goal, plan, state, progress, failures y decisions.md. Tras compactar o reanudar, el agente vuelve a leer los archivos en lugar de depender de la memoria de la conversación.</p></div>
+    <div class="card"><h3>🛡️ Límites y compuertas</h3><p>Tiempo, tokens y memoria con límite. Gasto de créditos, API, producción y acciones irreversibles se convierten en compuerta humana.</p></div>
+  </div>
+</div></section>
+
+<section id="fluxo"><div class="wrap">
+  <span class="chip">Cómo funciona</span>
+  <h2>Un ciclo que solo se detiene cuando se alcanza el criterio</h2>
+  <p class="sub">El agente elige siempre la siguiente acción útil, prueba, registra y continúa. Tres ciclos sin avance medible = detenerse y llamar al humano.</p>
+  <div class="flow">
+    <span>Objetivo</span><span class="arr">→</span>
+    <span>Lee el estado</span><span class="arr">→</span>
+    <span>Siguiente acción</span><span class="arr">→</span>
+    <span>Ejecuta</span><span class="arr">→</span>
+    <span>Prueba</span><span class="arr">→</span>
+    <span>Corrige</span><span class="arr">→</span>
+    <span>Guarda estado + commit</span><span class="arr">↺</span>
+  </div>
+  <div class="grid g3" style="margin-top:26px">
+    <div class="card"><h3>Sesión persistente</h3><p>Continuidad lógica del trabajo: el mismo objetivo, el mismo historial.</p></div>
+    <div class="card"><h3>Compactación</h3><p>Resume el historial antiguo para que quepa en la ventana. Cambia el prefijo y baja el caché justo después — es lo esperado.</p></div>
+    <div class="card"><h3>Prompt cache</h3><p>Reutiliza el prefijo idéntico. En sesiones continuas el acierto supera el 95%. Mida <code>cached ÷ input</code>.</p></div>
+  </div>
+</div></section>
+
+<section id="pre"><div class="wrap">
+  <span class="chip">Requisitos previos</span>
+  <h2>Lo que necesita</h2>
+  <p class="sub">Un agente de código con modo de objetivo y un proyecto con alguna prueba automática que sirva de oráculo.</p>
+  <div class="grid g3">
+    <div class="card"><h3>Codex CLI</h3><p>El <code>/goal</code> vive dentro del TUI (no aparece en el <code>--help</code>).</p><pre><span class="c"># versión reciente</span>
+<span class="k">codex</span> --version</pre></div>
+    <div class="card"><h3>o Claude Code</h3><p>También tiene <code>/goal</code>, además de <code>/loop</code>, background agents y workflows.</p><pre><span class="k">claude</span> --version</pre></div>
+    <div class="card"><h3>Las plantillas</h3><p>Clone este repositorio para copiar los archivos de estado y los prompts.</p><pre><span class="k">git clone</span> <span class="s">https://github.com/inematds/execucao-longa</span></pre></div>
+  </div>
+</div></section>
+
+<section id="guia"><div class="wrap">
+  <span class="chip">Guía de uso · paso a paso</span>
+  <h2>De la primera línea del goal hasta "concluido"</h2>
+  <p class="sub">Use las plantillas de <code>templates/</code>. Cada ejecución tiene su propia carpeta dentro del proyecto.</p>
+
+  <div class="step"><div class="b">1</div><div>
+    <h3>Cree la carpeta de estado de la ejecución</h3>
+    <p>Una carpeta por ejecución, con los seis archivos.</p>
+<pre><span class="k">mkdir -p</span> longrun/2026-10-01-meu-objetivo
+<span class="k">cp</span> execucao-longa/templates/{goal,plan,state,progress,failures,decisions}.md \
+   longrun/2026-10-01-meu-objetivo/</pre>
+  </div></div>
+
+  <div class="step"><div class="b">2</div><div>
+    <h3>Escriba el goal.md con criterios verificables</h3>
+    <p>Cada criterio es un comando y la salida esperada. Liste también las compuertas humanas.</p>
+<pre><span class="c">## Criterios de terminado (verificables)</span>
+- [ ] <span class="k">npm test</span>  → 0 fallos
+- [ ] <span class="k">npm run build</span>  → sale con código 0
+<span class="c">## Compuertas humanas (detenerse y preguntar)</span>
+- gasto de créditos / API de pago / deploy en producción</pre>
+  </div></div>
+
+  <div class="step"><div class="b">3</div><div>
+    <h3>Inicie el goal</h3>
+    <p>En Codex, pegue <code>templates/prompt-goal-codex.md</code> completado. Si el objetivo todavía es vago, ejecute <code>/plan</code> antes.</p>
+<pre><span class="k">codex</span>
+<span class="k">/goal</span> RESULTADO: ... VERIFICACIÓN: ... ESTADO: longrun/2026-10-01-meu-objetivo/
+<span class="c"># en Claude Code: la condición tiene que aparecer en la salida</span>
+<span class="k">/goal</span> <span class="s">la salida de npm test muestra 0 fallos y state.md dice "concluido"</span></pre>
+  </div></div>
+
+  <div class="step"><div class="b">4</div><div>
+    <h3>Acompañe sin interrumpir</h3>
+    <p>Vea el progreso, pause y reanude. Use fork para caminos alternativos.</p>
+<pre><span class="k">/goals</span>          <span class="c"># lista goals y estado</span>
+<span class="k">/goal pause</span>     <span class="c"># /goal resume para continuar</span>
+<span class="k">/side</span>           <span class="c"># pregunta de estado sin detener el trabajo</span>
+<span class="k">/fork</span>           <span class="c"># ramifica la sesión</span></pre>
+  </div></div>
+
+  <div class="step"><div class="b">5</div><div>
+    <h3>Lotes sin interfaz: codex exec con límites</h3>
+    <p>stdin cerrado (si no, se queda esperando entrada), timeout, límite de memoria y flock en cron.</p>
+<pre><span class="k">flock -n</span> /tmp/meu-lote.lock \
+  <span class="k">timeout</span> 4h <span class="k">systemd-run</span> --user --scope -p MemoryMax=8G \
+  <span class="k">codex exec</span> -s workspace-write --skip-git-repo-check - &lt; prompt.md</pre>
+  </div></div>
+
+  <div class="step"><div class="b">6</div><div>
+    <h3>Cierre y mida</h3>
+    <p>Registre en progress.md: turnos, compactaciones, tokens y cache ratio. Los scripts de <code>tools/medicao/</code> leen los JSONL.</p>
+<pre><span class="k">python3</span> tools/medicao/cx.py   <span class="c"># 10 sesiones más grandes de Codex: duración, compactaciones, tokens</span>
+<span class="k">python3</span> tools/medicao/cc.py   <span class="c"># 5 sesiones más grandes de Claude Code: cache_read %</span></pre>
+  </div></div>
+</div></section>
+
+<section id="novidades"><div class="wrap">
+  <span class="chip">Investigación · jul–oct/2026</span>
+  <h2>Qué cambió y qué es mito</h2>
+  <p class="sub">Resumen de la investigación con fuentes en <a href="https://github.com/inematds/execucao-longa/blob/main/docs/pesquisa-web-2026-10.md" target="_blank" rel="noopener">docs/pesquisa-web-2026-10.md</a> (en portugués).</p>
+  <div class="grid g2">
+    <div class="card"><h3>✅ Confirmado</h3><p><code>/goal</code>, <code>/compact</code>, <code>/resume</code> y <code>/fork</code> existen en Codex (docs oficiales). Los goals se reanudan tras el límite de uso (20/07) y tras el reinicio del daemon (17/09). Claude Code tiene <code>/goal</code> desde may/2026, con evaluador después de cada turno.</p></div>
+    <div class="card"><h3>🆕 Nuevos modelos</h3><p>GPT-6 Astra (03/09) mantiene notas entre ventanas de contexto. Claude Opus 5.5 (22/09) tiene 1M de contexto y lectura de caché a US$0,20/MTok.</p></div>
+    <div class="card"><h3>❓ Sin fuente</h3><p>La sesión de 11 días / 573 turnos / 1,3 GB no tiene fuente pública. Es plausible: hay reportes de logs de sesión de 0,7 a 2 GB.</p></div>
+    <div class="card"><h3>📐 No es un estándar oficial</h3><p>Los seis archivos de estado son una división de la misma idea del <code>PLANS.md</code> (OpenAI) y del <code>PROGRESS.md</code> + git (Anthropic).</p></div>
+  </div>
+</div></section>
+
+<section id="exemplos"><div class="wrap">
+  <span class="chip">Material de origen</span>
+  <h2>De dónde partió</h2>
+  <p class="sub">La infografía y la portada que originaron el proyecto, guardadas en <code>docs/origem/</code> junto con los cuatro textos.</p>
+  <div class="ex">
+    <figure><img src="../assets/ex1.jpg" alt="Infografía Codex — Ejecución Larga" loading="lazy"><figcaption>Infografía: /goal, ciclo continuo, archivos de estado, autonomía, compuertas y métricas.</figcaption></figure>
+    <figure><img src="../assets/ex2.jpg" alt="Portada: Ejecución larga, 11 días en la misma sesión" loading="lazy"><figcaption>Portada del experimento: 11 días en la misma sesión (cifra sin fuente pública).</figcaption></figure>
+  </div>
+</div></section>
+
+<section id="roadmap"><div class="wrap">
+  <span class="chip">Roadmap</span>
+  <h2>Fases del plan</h2>
+  <p class="sub">Detalles en <a href="https://github.com/inematds/execucao-longa/blob/main/docs/PLANO-EXECUCAO-LONGA.md" target="_blank" rel="noopener">docs/PLANO-EXECUCAO-LONGA.md</a> (en portugués).</p>
+  <div class="phase"><div class="tag">F0 ✓</div><div class="d"><strong>Documentación y plantillas</strong><span>Material de origen, investigación, plan y plantillas publicados.</span></div></div>
+  <div class="phase"><div class="tag">F1</div><div class="d"><strong>Piloto</strong><span>Una ejecución larga real con /goal y archivos de estado en un proyecto con prueba automática.</span></div></div>
+  <div class="phase"><div class="tag">F2</div><div class="d"><strong>Medición</strong><span>Herramienta única que lee el JSONL y muestra turnos, compactaciones y cache ratio.</span></div></div>
+  <div class="phase"><div class="tag">F3</div><div class="d"><strong>Reglas</strong><span>Bloque LONG-RUN en las instrucciones globales de los agentes.</span></div></div>
+  <div class="phase"><div class="tag">F4</div><div class="d"><strong>Red de seguridad</strong><span>timeout, flock y --max-turns en los jobs programados; hook que guarda el estado antes de compactar.</span></div></div>
+  <div class="phase"><div class="tag">F5</div><div class="d"><strong>Vigía de agente</strong><span>Alerta cuando el goal se traba o la sesión deja de avanzar.</span></div></div>
+  <div class="phase"><div class="tag">F6</div><div class="d"><strong>Higiene</strong><span>Archivar sesiones antiguas, que crecen hasta GB.</span></div></div>
+  <div class="phase"><div class="tag">F7</div><div class="d"><strong>Experimento "hasta dónde llega"</strong><span>Sesión continua durante días midiendo calidad × caché × compactación × costo.</span></div></div>
+</div></section>
+
+<section id="relacionados"><div class="wrap">
+  <span class="chip">Relacionados</span>
+  <h2>Otros proyectos de INEMA sobre el tema</h2>
+  <div class="grid g3" style="margin-top:20px">
+    <a class="card" href="https://inematds.github.io/agente-claude-codex/guia/" target="_blank" rel="noopener"><h3>🧠 agente-claude-codex</h3><p>Núcleo portátil y handoff entre sesiones y agentes.</p></a>
+    <a class="card" href="https://inematds.github.io/claude-session-kit/guia/" target="_blank" rel="noopener"><h3>🧰 claude-session-kit</h3><p>Statusline, checkpoints y handoff antes del /clear.</p></a>
+    <a class="card" href="https://inematds.github.io/loop-r/guia/" target="_blank" rel="noopener"><h3>🔁 loop-r</h3><p>Loops que se mejoran a sí mismos con evidencia y rollback.</p></a>
+  </div>
+</div></section>
+
+<footer>
+  <div class="wrap">
+    <div class="pill">Codex /goal</div><div class="pill">Claude Code</div><div class="pill">Markdown</div>
+    <p style="margin-top:18px">Ejecución Larga · investigación del 01/10/2026 ·
+      <a href="https://github.com/inematds/execucao-longa">inematds/execucao-longa</a> ·
+      <a href="https://inema.club">INEMA.CLUB</a></p>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    var KEY='execucao-longa-theme';
+    var b=document.body, t=document.getElementById('themeToggle');
+    if(localStorage.getItem(KEY)==='light'){ b.classList.add('light'); t.textContent='☀️'; }
+    t.addEventListener('click',function(){
+      var light=b.classList.toggle('light');
+      t.textContent=light?'☀️':'🌙';
+      localStorage.setItem(KEY, light?'light':'dark');
+    });
+  })();
+</script>
+</body>
+</html>
