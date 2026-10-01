@@ -98,7 +98,8 @@ Cada execução longa ganha uma pasta própria dentro do projeto:
 ### 5.2 Codex headless (`codex exec`) — lotes e scripts
 - `codex exec -m <modelo> -s <modo> --skip-git-repo-check - < prompt.md` — stdin **fechado** (sem isso o processo espera entrada e trava).
 - Sempre com teto: `timeout 4h`, limite de memória (`systemd-run --user --scope -p MemoryMax=...`) quando gerar carga, `flock` se vier de cron.
-- O prompt aponta para os arquivos de estado; cada execução é um ciclo curto; o laço externo (script) decide se roda o próximo ciclo lendo `state.md` / resultado do teste.
+- O prompt aponta para os arquivos de estado; cada execução é um ciclo curto; o laço externo decide se roda o próximo ciclo pelo **resultado do teste**, não pelo que o agente diz.
+- Pronto: `tools/loop-longrun.sh <pasta-longrun>` + `loop.env` (testes rápido/final, arquivos protegidos e permitidos, teto de ciclos, memória). Faz flock, timeout e `MemoryMax` por ciclo, reverte e conta como falho o ciclo que mexer em teste protegido, faz commit de checkpoint e para por estagnação. Exemplo real: `longrun/2026-10-01-medir-sessao/`.
 
 ### 5.3 Claude Code
 - **`/goal <condição>`**: o avaliador só vê a conversa, então a condição deve ser algo que o agente **mostra** na saída (ex.: "a saída do `npm test` mostra 0 falhas").
@@ -146,17 +147,26 @@ Por execução, registrar no `progress.md`:
 - erros e retrabalho (linhas em `failures.md`);
 - critério de pronto: atingido? em quanto tempo?
 
-Scripts para extrair isso dos JSONL do Codex (`~/.codex/sessions`) e do Claude Code (`~/.claude/projects`) em `tools/medicao/` (versão crua).
+`python3 tools/medir-sessao.py <sessão.jsonl> [--json] [--por-turno]` extrai tudo isso dos JSONL do Codex (`~/.codex/sessions`) e do Claude Code (`~/.claude/projects`, deduplicando mensagens por id). Lê 1,8 GB em ~9 s. Os scripts crus antigos continuam em `tools/medicao/`.
+
+**Atenção:** o Claude Code apaga as próprias transcrições após 30 dias (`cleanupPeriodDays`). Quem quiser comparar sessões antigas precisa medir antes ou aumentar esse valor.
 
 ## 8. Fases de implantação
 
 | Fase | Entrega | Critério de pronto |
 |---|---|---|
-| **F0** (feito) | Este repo: material de origem, pesquisa, plano, templates | publicado |
-| **F1 — piloto** | Uma execução longa real com `/goal` usando `longrun/` + templates, num projeto com teste automático | goal concluído + `progress.md` com métricas + lições registradas |
-| **F2 — medição** | `tools/medir-sessao.py <jsonl>` (Codex e Claude): turnos, compactações, cache ratio, bytes por tipo | bate com medição manual em 2 sessões grandes |
-| **F3 — regras** | Bloco LONG-RUN (`templates/AGENTS-long-run.md`) nas instruções globais dos agentes | uma sessão nova segue o padrão sem ser lembrada |
-| **F4 — rede de segurança** | `timeout` + `flock` + `--max-turns` nos jobs agendados com agente; hook antes de compactar/encerrar lembrando de salvar `state.md` | job travado não sobrepõe; hook dispara num teste |
-| **F5 — vigia de agente** | Watchdog que avisa quando um goal fica bloqueado/sem cota ou a sessão para de gerar eventos por X min | alerta chega num teste forçado |
-| **F6 — higiene** | Arquivar/comprimir sessões antigas (> 90 dias) | espaço liberado, nada ativo perdido |
-| **F7 — experimento "até onde vai"** | Uma sessão contínua por dias medindo qualidade × cache × compactação × custo; **comparar com o mesmo trabalho em modo fila** (§5.4) | curva por turno, ponto de corte recomendado e qual modo convergiu melhor |
+| **F0** ✅ | Este repo: material de origem, pesquisa, plano, templates | publicado |
+| **F1 — piloto** ✅ | Execução longa real em `longrun/2026-10-01-medir-sessao/`: goal nível 3, 14 testes congelados, loop headless com `codex exec` (GPT-6 Astra) | **concluído no 1º ciclo** (3 min, 10 turnos, cache 91%); verificação independente: hash dos testes intacto, sem valores fixos, 14/14 reproduzido, sessão nunca vista confere |
+| **F2 — medição** ✅ | `tools/medir-sessao.py` (entregue pelo piloto) | bate com o oráculo em 2 sessões grandes (1,8 GB Codex e 17 h Claude) + uma terceira não vista |
+| **F3 — regras** ✅ | Bloco de `templates/AGENTS-long-run.md` em `~/.claude/CLAUDE.md` e `~/.codex/AGENTS.md` | sessão nova do Claude e do Codex responde "novo-longrun.sh + nível 3" sem ser lembrada |
+| **F4 — rede de segurança** ✅ | `flock` + `timeout` nos 3 jobs do cron que chamam agente; `--max-turns` no `claude -p` do `resumir.py`; hook `tools/hook-longrun.sh` (PreCompact + SessionStart `compact\|resume`); `compact_prompt` estruturado no Codex | segunda instância sai na hora, timeout mata; numa sessão real com longrun ativo, o aviso chega após `/compact` e após retomar |
+| **F5 — vigia de agente** ✅ | `tools/vigia.py` + timer `longrun-vigia` (a cada 10 min): parado, parado sem aviso (lock solto), ociosa | 5 cenários testados; alerta forçado gravado em `~/.local/state/execucao-longa/alertas.log` + notify-send, sem repetir |
+| **F6 — higiene** 🟡 | `tools/arquivar-sessoes.py` (relatório por padrão; `--aplicar` comprime com conferência sha256; `--restaurar`) | ida e volta sem perda testada; **não aplicado nas sessões reais** (só 0,04 GB > 90 dias; decisão do usuário) |
+| **F7 — até onde vai** 🟡 | Curva retrospectiva em `docs/experimento-f7-retrospectivo-2026-10.md`; protocolo do experimento prospectivo (sessão única × modo fila) | retrospectiva feita (cache não cai com compactações; custo por turno cresce ~5x sem compactar); **prospectivo pendente** |
+
+### Lições do piloto (01/10/2026)
+- Com testes congelados e especificação precisa, o agente concluiu em **1 ciclo**: a maior parte do trabalho de uma execução longa é escrever o critério, não esperar.
+- O teste que decide é do loop, não do agente: o loop roda o teste final e confere o hash dos testes. O agente não fez commit nem tocou nos testes.
+- Verificar além do que o agente diz: hash dos testes, busca por valores fixos, rodar de novo e testar numa entrada nunca vista.
+- Hooks de compactação só falam se houver longrun **ativo**; um teste com execução já concluída parece falha do hook, mas é o comportamento certo.
+- O `/goal` interativo (TUI) não roda de dentro de uma sessão de agente; o piloto usou a receita headless (§5.2).

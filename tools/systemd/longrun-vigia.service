@@ -1,0 +1,7 @@
+[Unit]
+Description=Vigia de execuções longas (execucao-longa F5)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/nmaldaner/projetos/execucao-longa/tools/vigia.py --ocioso-min 30
+TimeoutStartSec=120

@@ -12,3 +12,4 @@ When I correct you, or you catch yourself making a mistake: before continuing, a
 ## Lessons
 - Antes de contestar um número (TTL, preço, multiplicador), conferir primeiro as pesquisas do próprio repo em `docs/` — não opinar de memória.
 - Nunca `open(f,'w')` e `open(f)` na mesma expressão (trunca antes de ler); ler para variável, depois escrever — principalmente em arquivo com mudança de outra sessão.
+- Comando ad hoc segue os guardrails do plano: `codex exec` sempre com `< /dev/null` ou prompt por arquivo; nunca `pkill -f <padrão>` no mesmo comando que contém o padrão.
