@@ -111,6 +111,7 @@
     <a class="sec" href="#oque">What it is</a>
     <a class="sec" href="#fluxo">How it works</a>
     <a class="sec" href="#guia">User guide</a>
+    <a class="sec" href="#contexto">Context & queue</a>
     <a class="sec" href="#novidades">What's new</a>
     <a class="sec" href="#roadmap">Roadmap</a>
     <span class="lang"><a href="../">PT</a><a class="on" href="./">EN</a><a href="../es/">ES</a></span>
@@ -236,6 +237,26 @@
   </div></div>
 </div></section>
 
+<section id="contexto"><div class="wrap">
+  <span class="chip">Long sessions · pitfalls</span>
+  <h2>Context rot, caching and queue mode</h2>
+  <p class="sub"><code>/goal</code> works, but sessions with many compactions lose the thread. Details and sources in <a href="https://github.com/inematds/execucao-longa/blob/main/docs/pesquisa-goal-contexto-fila-2026-10.md" target="_blank" rel="noopener">docs/pesquisa-goal-contexto-fila-2026-10.md</a> (in Portuguese).</p>
+  <div class="grid g2">
+    <div class="card"><h3>🧠 Does /goal degrade?</h3><p>It is not <code>/goal</code>, it is repeated compaction. The objective survives, but "what is done / what is left" gets lost: the agent keeps saying "I will finish and commit", reopens work and never converges (issue openai/codex #34095).</p></div>
+    <div class="card"><h3>🛡️ How to avoid it</h3><p>State in files, reread after every compaction; compact manually at 60–80% instead of waiting for the automatic one at ~95%; the 3rd compaction in one session is a warning → handoff + fresh session; one goal per feature.</p></div>
+    <div class="card"><h3>⏱️ Cache between cycles</h3><p>If the orchestrator sleeps between cycles, wake it before the cache expires: OpenAI 30 min (wake every ~25), Claude 1 h (~55). Losing the cache costs 12.5x to 25x. Waking only to keep the cache warm pays off if there is work in the next few hours.</p></div>
+    <div class="card"><h3>📋 Queue mode</h3><p>A growing backlog: the orchestrator takes the next task, dispatches it in a short session, checks it and closes it. It stops when no task is open (OpenAI's Symphony pattern, on top of Linear). Start with a local file-based queue.</p></div>
+  </div>
+  <div class="card" style="margin-top:18px"><h3>Queue mode rules</h3>
+    <ul style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+      <li>One task per file in <code>longrun/&lt;run&gt;/tasks/</code>, with a status and an <code>evidencia:</code> field.</li>
+      <li>Closing requires evidence (test output, file, commit hash) — otherwise "close without doing" becomes the shortcut.</li>
+      <li>The agent creates at most 5 tasks per run; beyond that they become <code>proposta</code> and wait for approval.</li>
+      <li>Empty queue → stop workers, log it in <code>progress.md</code> and stop. Linear/GitHub Issues only with authorization to use the API.</li>
+    </ul>
+  </div>
+</div></section>
+
 <section id="novidades"><div class="wrap">
   <span class="chip">Research · Jul–Oct/2026</span>
   <h2>What changed and what is myth</h2>
@@ -269,7 +290,7 @@
   <div class="phase"><div class="tag">F4</div><div class="d"><strong>Safety net</strong><span>timeout, flock and --max-turns on scheduled jobs; a hook that saves state before compacting.</span></div></div>
   <div class="phase"><div class="tag">F5</div><div class="d"><strong>Agent watchdog</strong><span>Alert when the goal gets stuck or the session stops making progress.</span></div></div>
   <div class="phase"><div class="tag">F6</div><div class="d"><strong>Hygiene</strong><span>Archive old sessions, which grow to GBs.</span></div></div>
-  <div class="phase"><div class="tag">F7</div><div class="d"><strong>"How far can it go" experiment</strong><span>A continuous session over days measuring quality × cache × compaction × cost.</span></div></div>
+  <div class="phase"><div class="tag">F7</div><div class="d"><strong>"How far can it go" experiment</strong><span>A continuous session over days measuring quality × cache × compaction × cost, compared with the same work in queue mode.</span></div></div>
 </div></section>
 
 <section id="relacionados"><div class="wrap">

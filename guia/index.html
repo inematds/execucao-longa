@@ -111,6 +111,7 @@
     <a class="sec" href="#oque">O que é</a>
     <a class="sec" href="#fluxo">Como funciona</a>
     <a class="sec" href="#guia">Guia de uso</a>
+    <a class="sec" href="#contexto">Contexto e fila</a>
     <a class="sec" href="#novidades">Novidades</a>
     <a class="sec" href="#roadmap">Roadmap</a>
     <span class="lang"><a class="on" href="./">PT</a><a href="en/">EN</a><a href="es/">ES</a></span>
@@ -236,6 +237,26 @@
   </div></div>
 </div></section>
 
+<section id="contexto"><div class="wrap">
+  <span class="chip">Sessões longas · cuidados</span>
+  <h2>Deterioração de contexto, cache e modo fila</h2>
+  <p class="sub">O <code>/goal</code> funciona, mas sessões com muitas compactações perdem o fio. Detalhes e fontes em <a href="https://github.com/inematds/execucao-longa/blob/main/docs/pesquisa-goal-contexto-fila-2026-10.md" target="_blank" rel="noopener">docs/pesquisa-goal-contexto-fila-2026-10.md</a>.</p>
+  <div class="grid g2">
+    <div class="card"><h3>🧠 O /goal deteriora?</h3><p>Não é o <code>/goal</code>, é a compactação repetida. O objetivo sobrevive, mas se perde o "o que já está feito / o que falta": o agente repete "vou terminar e commitar", reabre trabalho e não converge (issue openai/codex #34095).</p></div>
+    <div class="card"><h3>🛡️ Como evitar</h3><p>Estado em arquivo relido após toda compactação; compactar à mão entre 60 e 80% em vez de esperar o automático a ~95%; a 3ª compactação na mesma sessão é alerta → handoff + sessão nova; um goal por feature.</p></div>
+    <div class="card"><h3>⏱️ Cache entre ciclos</h3><p>Se o orquestrador dorme entre ciclos, acorde antes do cache expirar: OpenAI 30 min (acordar a cada ~25), Claude 1 h (~55). Perder o cache custa 12,5x a 25x. Acordar só para manter o cache vale se houver trabalho nas próximas horas.</p></div>
+    <div class="card"><h3>📋 Modo fila</h3><p>Backlog que cresce: o orquestrador pega a próxima tarefa, despacha numa sessão curta, confere e fecha. Para quando não há tarefa aberta (padrão do Symphony, da OpenAI, sobre o Linear). Comece com fila local em arquivos.</p></div>
+  </div>
+  <div class="card" style="margin-top:18px"><h3>Regras do modo fila</h3>
+    <ul style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+      <li>Uma tarefa por arquivo em <code>longrun/&lt;execução&gt;/tasks/</code>, com status e campo <code>evidencia:</code>.</li>
+      <li>Fechar exige evidência (saída de teste, arquivo, hash de commit) — senão "fechar sem fazer" vira atalho.</li>
+      <li>O agente cria no máximo 5 tarefas por execução; acima disso, viram <code>proposta</code> e esperam aprovação.</li>
+      <li>Fila vazia → encerrar workers, registrar em <code>progress.md</code> e parar. Linear/GitHub Issues só com autorização para a API.</li>
+    </ul>
+  </div>
+</div></section>
+
 <section id="novidades"><div class="wrap">
   <span class="chip">Pesquisa · jul–out/2026</span>
   <h2>O que mudou e o que é mito</h2>
@@ -269,7 +290,7 @@
   <div class="phase"><div class="tag">F4</div><div class="d"><strong>Rede de segurança</strong><span>timeout, flock e --max-turns nos jobs agendados; hook que salva o estado antes de compactar.</span></div></div>
   <div class="phase"><div class="tag">F5</div><div class="d"><strong>Vigia de agente</strong><span>Alerta quando o goal trava ou a sessão para de avançar.</span></div></div>
   <div class="phase"><div class="tag">F6</div><div class="d"><strong>Higiene</strong><span>Arquivar sessões antigas, que crescem a GB.</span></div></div>
-  <div class="phase"><div class="tag">F7</div><div class="d"><strong>Experimento "até onde vai"</strong><span>Sessão contínua por dias medindo qualidade × cache × compactação × custo.</span></div></div>
+  <div class="phase"><div class="tag">F7</div><div class="d"><strong>Experimento "até onde vai"</strong><span>Sessão contínua por dias medindo qualidade × cache × compactação × custo, comparada com o mesmo trabalho em modo fila.</span></div></div>
 </div></section>
 
 <section id="relacionados"><div class="wrap">

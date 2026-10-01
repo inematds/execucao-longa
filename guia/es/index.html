@@ -111,6 +111,7 @@
     <a class="sec" href="#oque">Qué es</a>
     <a class="sec" href="#fluxo">Cómo funciona</a>
     <a class="sec" href="#guia">Guía de uso</a>
+    <a class="sec" href="#contexto">Contexto y cola</a>
     <a class="sec" href="#novidades">Novedades</a>
     <a class="sec" href="#roadmap">Roadmap</a>
     <span class="lang"><a href="../">PT</a><a href="../en/">EN</a><a class="on" href="./">ES</a></span>
@@ -236,6 +237,26 @@
   </div></div>
 </div></section>
 
+<section id="contexto"><div class="wrap">
+  <span class="chip">Sesiones largas · cuidados</span>
+  <h2>Deterioro de contexto, caché y modo cola</h2>
+  <p class="sub">El <code>/goal</code> funciona, pero las sesiones con muchas compactaciones pierden el hilo. Detalles y fuentes en <a href="https://github.com/inematds/execucao-longa/blob/main/docs/pesquisa-goal-contexto-fila-2026-10.md" target="_blank" rel="noopener">docs/pesquisa-goal-contexto-fila-2026-10.md</a> (en portugués).</p>
+  <div class="grid g2">
+    <div class="card"><h3>🧠 ¿El /goal se deteriora?</h3><p>No es el <code>/goal</code>, es la compactación repetida. El objetivo sobrevive, pero se pierde "qué está hecho / qué falta": el agente repite "voy a terminar y hacer commit", reabre trabajo y no converge (issue openai/codex #34095).</p></div>
+    <div class="card"><h3>🛡️ Cómo evitarlo</h3><p>Estado en archivos, releído tras cada compactación; compactar a mano entre 60 y 80% en vez de esperar la automática a ~95%; la 3.ª compactación en la misma sesión es alerta → handoff + sesión nueva; un goal por funcionalidad.</p></div>
+    <div class="card"><h3>⏱️ Caché entre ciclos</h3><p>Si el orquestador duerme entre ciclos, despiértalo antes de que expire la caché: OpenAI 30 min (cada ~25), Claude 1 h (~55). Perder la caché cuesta de 12,5x a 25x. Despertar solo para mantener la caché compensa si hay trabajo en las próximas horas.</p></div>
+    <div class="card"><h3>📋 Modo cola</h3><p>Un backlog que crece: el orquestador toma la siguiente tarea, la despacha en una sesión corta, la verifica y la cierra. Se detiene cuando no hay tareas abiertas (patrón Symphony de OpenAI, sobre Linear). Empieza con una cola local en archivos.</p></div>
+  </div>
+  <div class="card" style="margin-top:18px"><h3>Reglas del modo cola</h3>
+    <ul style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+      <li>Una tarea por archivo en <code>longrun/&lt;ejecución&gt;/tasks/</code>, con estado y campo <code>evidencia:</code>.</li>
+      <li>Cerrar exige evidencia (salida de test, archivo, hash de commit) — si no, "cerrar sin hacer" se vuelve el atajo.</li>
+      <li>El agente crea como máximo 5 tareas por ejecución; más allá, quedan como <code>proposta</code> y esperan aprobación.</li>
+      <li>Cola vacía → detener workers, registrar en <code>progress.md</code> y parar. Linear/GitHub Issues solo con autorización para usar la API.</li>
+    </ul>
+  </div>
+</div></section>
+
 <section id="novidades"><div class="wrap">
   <span class="chip">Investigación · jul–oct/2026</span>
   <h2>Qué cambió y qué es mito</h2>
@@ -269,7 +290,7 @@
   <div class="phase"><div class="tag">F4</div><div class="d"><strong>Red de seguridad</strong><span>timeout, flock y --max-turns en los jobs programados; hook que guarda el estado antes de compactar.</span></div></div>
   <div class="phase"><div class="tag">F5</div><div class="d"><strong>Vigía de agente</strong><span>Alerta cuando el goal se traba o la sesión deja de avanzar.</span></div></div>
   <div class="phase"><div class="tag">F6</div><div class="d"><strong>Higiene</strong><span>Archivar sesiones antiguas, que crecen hasta GB.</span></div></div>
-  <div class="phase"><div class="tag">F7</div><div class="d"><strong>Experimento "hasta dónde llega"</strong><span>Sesión continua durante días midiendo calidad × caché × compactación × costo.</span></div></div>
+  <div class="phase"><div class="tag">F7</div><div class="d"><strong>Experimento "hasta dónde llega"</strong><span>Sesión continua durante días midiendo calidad × caché × compactación × costo, comparada con el mismo trabajo en modo cola.</span></div></div>
 </div></section>
 
 <section id="relacionados"><div class="wrap">
