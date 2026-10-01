@@ -1,0 +1,8 @@
+{"type":"user","timestamp":"2026-09-12T08:00:00.000Z","cwd":"/home/u/projetos/gama","sessionId":"cc1","message":{"role":"user","content":"Como configuro o webhook do Telegram?"}}
+{"type":"user","timestamp":"2026-09-12T08:00:01.000Z","cwd":"/home/u/projetos/gama","isMeta":true,"message":{"role":"user","content":"meta escondido zebraxyz"}}
+{"type":"user","timestamp":"2026-09-12T08:00:02.000Z","cwd":"/home/u/projetos/gama","message":{"role":"user","content":"<system-reminder>lembrete zebraxyz</system-reminder>"}}
+{"type":"assistant","timestamp":"2026-09-12T08:00:03.000Z","cwd":"/home/u/projetos/gama","message":{"id":"m1","role":"assistant","content":[{"type":"thinking","thinking":"pensamento zebraxyz"},{"type":"text","text":"Use setWebhook apontando para a URL pública."}]}}
+{"type":"assistant","timestamp":"2026-09-12T08:00:04.000Z","cwd":"/home/u/projetos/gama","message":{"id":"m1","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"curl -s https://api.telegram.org/bot/setWebhook","description":"Registra webhook"}}]}}
+{"type":"user","timestamp":"2026-09-12T08:00:05.000Z","cwd":"/home/u/projetos/gama","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"saida enorme quimeraxyz"}]}}
+{"type":"user","timestamp":"2026-09-12T08:01:00.000Z","cwd":"/home/u/projetos/gama","message":{"role":"user","content":[{"type":"text","text":"Ótimo, e o certificado autoassinado?"}]}}
+linha quebrada

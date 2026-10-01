@@ -1,0 +1,10 @@
+{"timestamp":"2026-09-10T10:00:00.000Z","type":"session_meta","payload":{"id":"cx1","cwd":"/home/u/projetos/alfa"}}
+{"timestamp":"2026-09-10T10:00:01.000Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"instrucoes do sistema zebraxyz"}]}}
+{"timestamp":"2026-09-10T10:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions\n\nregra global zebraxyz"}]}}
+{"timestamp":"2026-09-10T10:00:03.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Quero migrar o banco para PostgreSQL até sexta"}]}}
+{"timestamp":"2026-09-10T10:00:04.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Vou criar a migração com Alembic."}]}}
+{"timestamp":"2026-09-10T10:00:05.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"cmd\":\"alembic revision -m inicial\"}"}}
+{"timestamp":"2026-09-10T10:00:06.000Z","type":"response_item","payload":{"type":"function_call_output","output":"saida gigante quimeraxyz"}}
+{"timestamp":"2026-09-10T10:30:00.000Z","type":"compacted","payload":{"message":"resumo","replacement_history":[{"type":"message","role":"user","content":[{"type":"input_text","text":"Quero migrar o banco para PostgreSQL até sexta"}]}]}}
+{"timestamp":"2026-09-10T10:30:01.000Z","type":"turn_context","payload":{"cwd":"/home/u/projetos/beta","model":"gpt-6-astra"}}
+{"timestamp":"2026-09-10T10:30:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Migração concluída no projeto beta."}]}}
