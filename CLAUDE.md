@@ -1,0 +1,12 @@
+# CLAUDE.md — execucao-longa
+
+Repo de documentação/plano sobre execuções longas de agentes. Conta GitHub: `inematds` (autor `inematds <inematds@gmail.com>`).
+
+- Plano vivo: `docs/PLANO-EXECUCAO-LONGA.md`. Pesquisas datadas em `docs/pesquisa-*-AAAA-MM.md` (não reescrever as antigas; criar nova).
+- Material original em `docs/origem/` — não editar.
+
+## Self-learning
+
+When I correct you, or you catch yourself making a mistake: before continuing, add the lesson as a one-line rule under ## Lessons, so it never happens again.
+
+## Lessons
