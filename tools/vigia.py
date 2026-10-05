@@ -6,7 +6,7 @@ Procura execuções ativas (longrun/*/state.md sem "concluído") nos projetos e 
   - PARADO SEM AVISO: a pasta tem loop.log mas nenhum processo do loop está vivo nela;
   - OCIOSA: nada mudou na pasta e nenhuma sessão (Codex/Claude) gravou eventos há mais de N minutos.
 Cada problema alerta uma vez (estado em ~/.local/state/execucao-longa/vigia.json) e volta a alertar
-só depois de resolvido. Alerta = linha em ~/.local/state/execucao-longa/alertas.log + notify-send.
+só depois de resolvido. Alerta = linha em ~/.local/state/execucao-longa/alertas.log (+ notify-send só com --desktop).
 --notificar-cmd permite plugar outro canal (ex.: Telegram) — só com autorização para essa API.
 
 Uso: tools/vigia.py [--raiz ~/projetos] [--ocioso-min 30] [--notificar-cmd CMD] [--seco]
@@ -66,14 +66,15 @@ def diagnosticar(pasta, ocioso_min, agora):
     return None, None
 
 
-def alertar(msg, cmd, seco):
+def alertar(msg, cmd, seco, desktop=False):
     print(msg)
     if seco:
         return
     ESTADO_DIR.mkdir(parents=True, exist_ok=True)
     with open(ESTADO_DIR / "alertas.log", "a") as f:
         f.write(f"{time.strftime('%F %T')} {msg}\n")
-    subprocess.run(["notify-send", "-u", "critical", "Execução longa", msg], capture_output=True)
+    if desktop:  # opt-in: pop-up crítico acumulava no topo da tela (05/10/2026)
+        subprocess.run(["notify-send", "-u", "critical", "Execução longa", msg], capture_output=True)
     if cmd:
         subprocess.run(shlex.split(cmd) + [msg], capture_output=True, timeout=60)
 
@@ -83,6 +84,7 @@ def main():
     ap.add_argument("--raiz", default=str(pathlib.Path.home() / "projetos"))
     ap.add_argument("--ocioso-min", type=float, default=30)
     ap.add_argument("--notificar-cmd", default="")
+    ap.add_argument("--desktop", action="store_true", help="também mostra pop-up (notify-send)")
     ap.add_argument("--seco", action="store_true", help="só imprime, não grava nem notifica")
     a = ap.parse_args()
 
@@ -100,7 +102,7 @@ def main():
         chave = f"{pasta}:{tipo}"
         novo[chave] = estado.get(chave, agora)
         if chave not in estado:
-            alertar(f"[{tipo}] {pasta}: {detalhe}", a.notificar_cmd, a.seco)
+            alertar(f"[{tipo}] {pasta}: {detalhe}", a.notificar_cmd, a.seco, a.desktop)
     if not a.seco:
         ESTADO_DIR.mkdir(parents=True, exist_ok=True)
         estado_f.write_text(json.dumps(novo, indent=1))

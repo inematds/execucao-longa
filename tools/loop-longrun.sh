@@ -30,7 +30,8 @@ flock -n 9 || { echo "outro loop já roda nesta pasta" >&2; exit 3; }
 cd "$repo"
 
 log() { echo "$(date '+%F %T') $*" | tee -a "$dir/loop.log"; }
-passados() { bash -c "$1" 2>&1 | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || echo 0; }
+# pipefail faz o pytest com falhas derrubar a pipeline: capturar e completar com 0, nunca "N\n0"
+passados() { local n; n=$(bash -c "$1" 2>&1 | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+'); echo "${n:-0}"; }
 
 melhor=$(passados "$TESTE_RAPIDO"); sem_avanco=0
 log "início: rápido=$melhor passed · agente=$AGENTE · teto ${MAX_CICLOS}x${MIN_CICLO}min · mem $MEM"
