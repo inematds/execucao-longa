@@ -11,6 +11,8 @@
 #   PERMITIDOS="tools/medir-sessao.py"        # o que entra no commit de checkpoint (além da pasta longrun)
 #   MAX_CICLOS=6  MIN_CICLO=20  MEM=8G  ESTAGNACAO=3
 #   AGENTE=codex  MODELO=gpt-6-astra          # AGENTE=claude usa `claude -p --max-turns 60` (ainda não testado)
+#   CODEX_ARGS="-c sandbox_workspace_write.network_access=true"  # se os testes sobem servidor local:
+#                                             # o sandbox workspace-write bloqueia até socket em 127.0.0.1
 # Progresso = nº de testes RÁPIDOS passando. Se o que falta está só no teste final (lento), cada ciclo
 # conta como "sem avanço": ponha esses casos também no teste rápido ou aumente ESTAGNACAO.
 set -uo pipefail
@@ -38,7 +40,8 @@ for ((i = 1; i <= MAX_CICLOS; i++)); do
   if [ "$AGENTE" = claude ]; then
     cmd=(claude -p --max-turns 60 --permission-mode acceptEdits)
   else
-    cmd=("$CODEX" exec -m "$MODELO" -s workspace-write --skip-git-repo-check -C "$repo" -)
+    # shellcheck disable=SC2206
+    cmd=("$CODEX" exec -m "$MODELO" -s workspace-write ${CODEX_ARGS:-} --skip-git-repo-check -C "$repo" -)
   fi
   t0=$(date +%s)
   timeout "${MIN_CICLO}m" systemd-run --user --scope -q -p MemoryMax="$MEM" "${cmd[@]}" \
