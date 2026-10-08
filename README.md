@@ -41,7 +41,7 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sessão.jsonl> --json -
 
 1. Clone em `~/projetos/execucao-longa`.
 2. Cole [`templates/AGENTS-long-run.md`](templates/AGENTS-long-run.md) no `CLAUDE.md` e no `AGENTS.md` globais — o agente passa a seguir o método sem ser lembrado.
-3. No `~/.claude/settings.json`, ligue `tools/hook-longrun.sh` em `PreCompact`, `SessionStart` (matcher `compact|resume`), `PostToolUse` e `UserPromptSubmit`. Ele avisa o agente por **faixa de contexto**: ~50% → anotar no `canal.md`; ~70% → atualizar o estado e `/compact`; ~85% → `/session-handoff` + sessão nova + `/prime`. Também manda reler o estado depois de compactar ou retomar. E ponha `"cleanupPeriodDays": 365` (o padrão de 30 dias apaga as transcrições).
+3. No `~/.claude/settings.json`, ligue `tools/hook-longrun.sh` em `PreCompact`, `SessionStart` (matcher `compact|resume`), `PostToolUse` e `UserPromptSubmit`. Ele avisa o agente por **faixa de contexto**: ~50% → anotar no `canal.md`; ~70% → atualizar o estado e `/compact`; ~85% → `/session-handoff` + sessão nova + `/prime`. Também manda reler o estado depois de compactar ou retomar. **Em qualquer sessão** (mesmo sem execução longa), em ~70% e ~85% e depois de uma compactação, pede ao agente que grave o handoff sozinho (skill `session-handoff`), enquanto o cache ainda está quente. E ponha `"cleanupPeriodDays": 365` (o padrão de 30 dias apaga as transcrições).
 4. Vigia: copie `tools/systemd/longrun-vigia.*` para `~/.config/systemd/user/` e rode `systemctl --user enable --now longrun-vigia.timer` (alerta execução parada ou ociosa).
 5. Crons que chamam agente: `flock -n <lock> timeout <teto> <script>`.
 
