@@ -52,8 +52,8 @@
   .tgl:hover{border-color:var(--amb)}
   .btn{display:inline-block;background:var(--amb);color:#1a1206;font-weight:600;padding:.6em 1.05em;border-radius:10px;font-family:Sora}
   .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
-  @media(max-width:1400px){nav .links a.sec[href="#oque"],nav .links a.sec[href="#roadmap"]{display:none}}
-  @media(max-width:1180px){nav .links a.sec{display:none}}
+  @media(max-width:1600px){nav .links a.sec[href="#oque"],nav .links a.sec[href="#roadmap"]{display:none}}
+  @media(max-width:1280px){nav .links a.sec{display:none}}
   @media(max-width:680px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
   .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
   .hero .glow{position:absolute;inset:-40% -20% auto auto;width:70%;height:600px;background:radial-gradient(closest-side,rgba(226,162,59,.22),transparent 70%);pointer-events:none}
@@ -111,6 +111,7 @@
   <div class="links">
     <a class="sec" href="#oque">O que é</a>
     <a class="sec" href="#fluxo">Como funciona</a>
+    <a class="sec" href="#troca">Handoff</a>
     <a class="sec" href="#guia">Guia de uso</a>
     <a class="sec" href="#criterios">Critérios</a>
     <a class="sec" href="#contexto">Contexto e fila</a>
@@ -168,6 +169,39 @@
     <div class="card"><h3>Sessão persistente</h3><p>Continuidade lógica do trabalho: o mesmo objetivo, o mesmo histórico.</p></div>
     <div class="card"><h3>Compactação</h3><p>Resume o histórico antigo para caber na janela. Muda o prefixo e baixa o cache logo depois — é esperado.</p></div>
     <div class="card"><h3>Prompt cache</h3><p>Reaproveita o prefixo idêntico. Em sessões contínuas o acerto passa de 95%. Meça <code>cached ÷ input</code>.</p></div>
+  </div>
+</div></section>
+
+<section id="troca"><div class="wrap">
+  <span class="chip">Em destaque · troca de sessão</span>
+  <h2>Trocar de sessão sem perder o fio: <span class="amb">handoff → /clear → /prime</span></h2>
+  <p class="sub">Quando o contexto enche ou a sessão já compactou, não insista na mesma conversa. Grave o estado num arquivo, limpe e recomece lendo esse arquivo. É o processo que recomendamos para qualquer trabalho longo, no Claude Code e no Codex.</p>
+  <div class="flow">
+    <span>/session-handoff (grava)</span><span class="arr">→</span>
+    <span>/clear (zera a conversa)</span><span class="arr">→</span>
+    <span>/prime (relê e resume)</span><span class="arr">→</span>
+    <span>Continua da próxima ação</span>
+  </div>
+  <div class="grid g3" style="margin-top:26px">
+    <div class="card"><h3>💾 1. /session-handoff</h3><p>Escreve o que foi feito, o que está em andamento, a <b>próxima ação exata</b> e o que depende do humano, sem segredos. Grava um arquivo novo em <code>handoffs/history/&lt;data-UTC&gt;.md</code> (nunca sobrescreve) e atualiza <code>handoffs/latest.md</code>.</p></div>
+    <div class="card"><h3>🧹 2. /clear</h3><p>Começa do zero: contexto vazio, sem o peso das compactações. Nada se perde, porque o estado está no arquivo. No Codex, abra uma sessão nova.</p></div>
+    <div class="card"><h3>🔎 3. /prime</h3><p>Antes de agir, lê <code>AGENTS.md</code>/<code>CLAUDE.md</code>, <code>context/</code>, <code>tasks/current.md</code> e <code>handoffs/latest.md</code> e devolve um briefing curto: objetivo, regra principal com fonte, última decisão, próxima ação e conflitos. Só lê: não retoma publicação, deploy ou envio por conta própria.</p></div>
+  </div>
+  <div class="card" style="margin-top:18px;border-color:var(--amb)"><h3>⚡ Automático com o hook</h3><p>Com o <code>tools/hook-longrun.sh</code> ligado, o agente grava o handoff sozinho em <b>~70%</b> e <b>~85%</b> do contexto e logo depois de uma compactação, enquanto o cache ainda está quente (sai barato). Você só dá <code>/clear</code> e <code>/prime</code>. Instalação em <a href="#usar">Como usar tudo</a>.</p></div>
+  <div class="card" style="margin-top:18px;border-color:var(--amb)"><h3>⚠️ Existem duas session-handoff: confira qual você tem</h3>
+    <div class="grid g2" style="margin-top:10px">
+      <div><p><b>Versão comum (só chat)</b>, a que circula em kits e repositórios de skills: mostra o resumo na conversa e não grava nada. Ao dar <code>/clear</code>, o resumo vai embora junto, a menos que você copie à mão, e o <code>/prime</code> não encontra o que ler.</p></div>
+      <div><p><b>Versão INEMA (grava em arquivo)</b>, do kit <a href="https://github.com/inematds/agente-claude-codex" target="_blank" rel="noopener">agente-claude-codex</a> (1.2.1): mostra no chat <b>e</b> grava em <code>handoffs/</code>; cria a pasta se o projeto só tiver <code>CLAUDE.md</code>. Funciona no Claude Code (<code>~/.claude/skills</code>) e no Codex (<code>~/.agents/skills</code>), com o <code>/prime</code> como par.</p></div>
+    </div>
+    <pre><span class="c"># 0 = versão só chat; 1 ou mais = grava em handoffs/</span>
+<span class="k">grep</span> -c <span class="s">"handoffs/history"</span> ~/.claude/skills/session-handoff/SKILL.md
+
+<span class="c"># instalar ou trocar pela versão que grava (prévia primeiro, depois --apply)</span>
+<span class="k">git clone</span> <span class="s">https://github.com/inematds/agente-claude-codex</span> && <span class="k">cd</span> agente-claude-codex
+scripts/sync-skills.sh install session-handoff --all
+scripts/sync-skills.sh install session-handoff --all --apply --replace
+scripts/sync-skills.sh install prime --all --apply --replace</pre>
+    <p class="mut" style="margin-top:8px">O <code>--replace</code> guarda a versão antiga em <code>~/.claude/skills-backup/</code> e <code>~/.agents/skills-backup/</code>. Guia do kit: <a href="https://inematds.github.io/agente-claude-codex/guia/#ferramentas" target="_blank" rel="noopener">agente-claude-codex/guia</a>.</p>
   </div>
 </div></section>
 

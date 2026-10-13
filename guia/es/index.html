@@ -52,8 +52,8 @@
   .tgl:hover{border-color:var(--amb)}
   .btn{display:inline-block;background:var(--amb);color:#1a1206;font-weight:600;padding:.6em 1.05em;border-radius:10px;font-family:Sora}
   .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
-  @media(max-width:1400px){nav .links a.sec[href="#oque"],nav .links a.sec[href="#roadmap"]{display:none}}
-  @media(max-width:1180px){nav .links a.sec{display:none}}
+  @media(max-width:1600px){nav .links a.sec[href="#oque"],nav .links a.sec[href="#roadmap"]{display:none}}
+  @media(max-width:1280px){nav .links a.sec{display:none}}
   @media(max-width:680px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
   .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
   .hero .glow{position:absolute;inset:-40% -20% auto auto;width:70%;height:600px;background:radial-gradient(closest-side,rgba(226,162,59,.22),transparent 70%);pointer-events:none}
@@ -111,6 +111,7 @@
   <div class="links">
     <a class="sec" href="#oque">Qué es</a>
     <a class="sec" href="#fluxo">Cómo funciona</a>
+    <a class="sec" href="#troca">Handoff</a>
     <a class="sec" href="#guia">Guía de uso</a>
     <a class="sec" href="#criterios">Criterios</a>
     <a class="sec" href="#contexto">Contexto y cola</a>
@@ -168,6 +169,39 @@
     <div class="card"><h3>Sesión persistente</h3><p>Continuidad lógica del trabajo: el mismo objetivo, el mismo historial.</p></div>
     <div class="card"><h3>Compactación</h3><p>Resume el historial antiguo para que quepa en la ventana. Cambia el prefijo y baja el caché justo después — es lo esperado.</p></div>
     <div class="card"><h3>Prompt cache</h3><p>Reutiliza el prefijo idéntico. En sesiones continuas el acierto supera el 95%. Mida <code>cached ÷ input</code>.</p></div>
+  </div>
+</div></section>
+
+<section id="troca"><div class="wrap">
+  <span class="chip">Destacado · cambio de sesión</span>
+  <h2>Cambiar de sesión sin perder el hilo: <span class="amb">handoff → /clear → /prime</span></h2>
+  <p class="sub">Cuando el contexto se llena o la sesión ya se compactó, no insistas en la misma conversación. Guarda el estado en un archivo, limpia y vuelve a empezar leyendo ese archivo. Es el proceso que recomendamos para cualquier trabajo largo, en Claude Code y en Codex.</p>
+  <div class="flow">
+    <span>/session-handoff (guarda)</span><span class="arr">→</span>
+    <span>/clear (vacía la conversación)</span><span class="arr">→</span>
+    <span>/prime (relee y resume)</span><span class="arr">→</span>
+    <span>Sigue desde la próxima acción</span>
+  </div>
+  <div class="grid g3" style="margin-top:26px">
+    <div class="card"><h3>💾 1. /session-handoff</h3><p>Escribe lo que se hizo, lo que está en curso, la <b>próxima acción exacta</b> y lo que depende del humano, sin secretos. Guarda un archivo nuevo en <code>handoffs/history/&lt;fecha-UTC&gt;.md</code> (nunca sobrescribe) y actualiza <code>handoffs/latest.md</code>.</p></div>
+    <div class="card"><h3>🧹 2. /clear</h3><p>Empieza de cero: contexto vacío, sin el peso de las compactaciones. No se pierde nada, porque el estado está en el archivo. En Codex, abre una sesión nueva.</p></div>
+    <div class="card"><h3>🔎 3. /prime</h3><p>Antes de actuar, lee <code>AGENTS.md</code>/<code>CLAUDE.md</code>, <code>context/</code>, <code>tasks/current.md</code> y <code>handoffs/latest.md</code> y devuelve un resumen corto: objetivo, regla principal con fuente, última decisión, próxima acción y conflictos. Solo lee: nunca retoma publicación, deploy ni envíos por su cuenta.</p></div>
+  </div>
+  <div class="card" style="margin-top:18px;border-color:var(--amb)"><h3>⚡ Automático con el hook</h3><p>Con <code>tools/hook-longrun.sh</code> activado, el agente guarda el handoff solo al <b>~70%</b> y al <b>~85%</b> del contexto y justo después de una compactación, mientras la caché sigue caliente (sale barato). Tú solo haces <code>/clear</code> y <code>/prime</code>. Instalación en <a href="#usar">Cómo usarlo todo</a>.</p></div>
+  <div class="card" style="margin-top:18px;border-color:var(--amb)"><h3>⚠️ Hay dos session-handoff: revisa cuál tienes</h3>
+    <div class="grid g2" style="margin-top:10px">
+      <div><p><b>Versión común (solo chat)</b>, la que circula en kits y repositorios de skills: muestra el resumen en la conversación y no guarda nada. Al hacer <code>/clear</code>, el resumen se va con ella, salvo que lo copies a mano, y <code>/prime</code> no encuentra qué leer.</p></div>
+      <div><p><b>Versión INEMA (guarda en archivo)</b>, del kit <a href="https://github.com/inematds/agente-claude-codex" target="_blank" rel="noopener">agente-claude-codex</a> (1.2.1): lo muestra en el chat <b>y</b> lo guarda en <code>handoffs/</code>; crea la carpeta si el proyecto solo tiene <code>CLAUDE.md</code>. Funciona en Claude Code (<code>~/.claude/skills</code>) y en Codex (<code>~/.agents/skills</code>), junto con <code>/prime</code>.</p></div>
+    </div>
+    <pre><span class="c"># 0 = versión solo chat; 1 o más = guarda en handoffs/</span>
+<span class="k">grep</span> -c <span class="s">"handoffs/history"</span> ~/.claude/skills/session-handoff/SKILL.md
+
+<span class="c"># instalar o cambiar por la versión que guarda (vista previa primero, luego --apply)</span>
+<span class="k">git clone</span> <span class="s">https://github.com/inematds/agente-claude-codex</span> && <span class="k">cd</span> agente-claude-codex
+scripts/sync-skills.sh install session-handoff --all
+scripts/sync-skills.sh install session-handoff --all --apply --replace
+scripts/sync-skills.sh install prime --all --apply --replace</pre>
+    <p class="mut" style="margin-top:8px"><code>--replace</code> guarda la versión anterior en <code>~/.claude/skills-backup/</code> y <code>~/.agents/skills-backup/</code>. Guía del kit: <a href="https://inematds.github.io/agente-claude-codex/guia/#ferramentas" target="_blank" rel="noopener">agente-claude-codex/guia</a>.</p>
   </div>
 </div></section>
 
