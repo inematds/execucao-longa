@@ -141,6 +141,46 @@ def test_estado_antigo_numero_puro(tmp_path):
     assert a.run("PostToolUse") == {}  # já estava na faixa 2
 
 
+def test_continuo_pede_uma_vez_e_respeita_intervalo(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(160_000))
+    out = a.run("Stop")
+    assert out.get("decision") == "block" and "Handoff contínuo" in out["reason"]
+    assert a.run("Stop") == {}  # 1 pedido a cada 30 min
+
+
+def test_continuo_nao_repete_quando_o_stop_ja_fez_continuar(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(160_000))
+    assert a.run("Stop", stop_hook_active=True) == {}
+
+
+def test_continuo_pula_com_handoff_recente_ou_contexto_pequeno(tmp_path):
+    a = Ambiente(tmp_path)
+    rel = "handoffs/history/2026-10-15T060000Z.md"
+    (a.proj / rel).write_text("x" * 300)
+    a.linhas(assistente(160_000), escrita(rel))
+    assert a.run("Stop") == {}
+    (tmp_path / "b").mkdir()
+    b = Ambiente(tmp_path / "b")
+    b.linhas(assistente(100_000))
+    assert b.run("Stop") == {}
+    (tmp_path / "c").mkdir()
+    c = Ambiente(tmp_path / "c", handoffs=False)
+    c.linhas(assistente(160_000))
+    assert c.run("Stop") == {}
+
+
+def test_continuo_depois_confere_o_handoff(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(155_000))
+    a.run("Stop")
+    rel = "handoffs/history/2026-10-15T070000Z.md"
+    (a.proj / rel).write_text("x" * 300)
+    a.linhas(escrita(rel))
+    assert "Handoff conferido" in a.run("PostToolUse").get("systemMessage", "")
+
+
 def test_longrun_faixa1_no_teto(tmp_path):
     a = Ambiente(tmp_path)
     lr = a.proj / "longrun" / "x"

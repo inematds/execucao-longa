@@ -14,6 +14,11 @@ Em QUALQUER sessão (sem longrun ativo):
       grande, BLOQUEIA uma vez o envio e explica: reenviar continua (relendo tudo sem cache) ou /clear limpa.
   SessionStart (clear)          → aponta o último handoff do projeto para o agente ler com /prime se o pedido
       continuar aquele trabalho.
+  Stop (handoff contínuo)       → ao fim de uma resposta, com contexto ≥ 150 mil tokens e nenhum handoff gravado
+      por ESTA sessão nos últimos 30 min, devolve "block" uma vez: o agente atualiza o handoff com o cache quente
+      (~20 mil tokens equivalentes contra 250–400 mil de releitura fria depois de parado). No máximo 1 pedido a cada
+      30 min por sessão; nunca quando o próprio Stop já fez o agente continuar (stop_hook_active). Só em projeto com
+      a pasta handoffs/.
 
 Com longrun/*/state.md sem "concluído" no projeto, valem as mensagens de execução longa abaixo
 (que também incluem o handoff nas faixas 2 e 3):
@@ -32,9 +37,12 @@ Depois de uma compactação a % cai e as faixas voltam a valer.
 
 Ajustes por ambiente: LONGRUN_FAIXAS="50,70,85"  LONGRUN_TETO=225000  LONGRUN_JANELA=<força a janela>
   LONGRUN_PAUSA_MIN=60  LONGRUN_PAUSA_TOKENS=150000 (0 desliga o bloqueio)  LONGRUN_DEBUG=<arquivo>
+  LONGRUN_CONTINUO_TOKENS=150000 (0 desliga o handoff contínuo)  LONGRUN_CONTINUO_MIN=30
 O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar uma chamada de ferramenta depois.
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
+
+VERSAO = "1.1.0"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -268,6 +276,27 @@ def ao_limpar(d, raiz):
         "não retome publicação, envio ou deploy por conta própria."}})
 
 
+def continuo(d, st, raiz):
+    """Stop: pede UMA atualização do handoff com o cache quente; None se não for hora."""
+    minimo = env_int("LONGRUN_CONTINUO_TOKENS", 150_000)
+    if not minimo or d.get("stop_hook_active") or not (pathlib.Path(raiz) / "handoffs").is_dir():
+        return None
+    intervalo = env_int("LONGRUN_CONTINUO_MIN", 30) * 60
+    agora = time.time()
+    if agora - st.get("continuo", 0) < intervalo:
+        return None
+    t = d.get("transcript_path", "")
+    tok, _ = uso_contexto(t)
+    if tok < minimo or handoff_gravado(t, agora - intervalo, raiz):
+        return None
+    st["continuo"] = agora
+    pedir_handoff(st, raiz)  # a conferência confirma nos próximos eventos
+    return (f"Handoff contínuo: contexto em {tok // 1000} mil tokens e nenhum handoff desta sessão nos últimos "
+            f"{intervalo // 60} min. Antes de parar, atualize o handoff com a skill session-handoff "
+            "(handoffs/history/<UTC>.md + handoffs/latest.md): com o cache quente sai barato. Não comece trabalho novo; "
+            "termine com uma linha \"Handoff atualizado: <arquivo>\".")
+
+
 def emitir(ev, ctx=None, aviso=None):
     out = {}
     if ctx:
@@ -334,6 +363,12 @@ def main():
     if ev == "SessionStart" and d.get("source") == "clear":
         return ao_limpar(d, raiz)
     st = carregar(d)
+    if ev == "Stop":
+        motivo = continuo(d, st, raiz)
+        salvar(d, st)
+        if motivo:
+            saida({"decision": "block", "reason": motivo})
+        return
     pastas = ativas(raiz)
     if not pastas:
         return sem_longrun(d, ev, st, raiz)
