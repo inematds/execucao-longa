@@ -4,7 +4,7 @@
 Em QUALQUER sessão (sem longrun ativo):
   PostToolUse / UserPromptSubmit → nas faixas 2 e 3 do contexto: grave o handoff agora (skill session-handoff),
       enquanto o cache ainda está quente; na faixa 3 também sugira sessão nova.
-  SessionStart (compact)        → houve compactação: grave o handoff a partir do resumo; na 3ª compactação da
+  SessionStart (compact)        → houve compactação: releia o handoff recente desta sessão junto com o resumo (ou grave um, se não houver); na 3ª compactação da
       mesma sessão, peça também sessão nova (/clear + /prime).
   Conferência do handoff        → depois de cada pedido, o hook procura na transcrição uma gravação em
       handoffs/history/ feita depois do pedido e confere que o arquivo existe. Se em 8 eventos não houver,
@@ -44,7 +44,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.3.1"
+VERSAO = "1.4.1"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -208,8 +208,10 @@ HANDOFF = ("grave o handoff AGORA com a skill session-handoff (script handoff-gr
            "que gravou e continue o trabalho.")
 SEGUIR = (" Depois avise em uma linha e CONTINUE a tarefa que o usuário pediu até o fim: o handoff não encerra a sessão, "
           "não pare no meio nem peça /clear agora. Só quando a tarefa terminar, sugira sessão nova + /prime.")
-HANDOFF_POS_COMPACT = ("Se nesta sessão ainda não foi gravado um handoff depois da última tarefa concluída, grave-o agora "
-                       "com a skill session-handoff a partir do resumo (sem esperar pedido) e avise em uma linha.")
+HANDOFF_POS_COMPACT = ("O resumo da compactação guarda bem arquivos e passos recentes, mas não separa o confirmado do não "
+                       "verificado nem as decisões do usuário: se esta sessão gravou um handoff (handoffs/history/), releia-o "
+                       "agora junto com o resumo antes de agir. Se não gravou nenhum nos últimos 30 min, grave um com a skill "
+                       "session-handoff e avise em uma linha. Depois continue a tarefa em curso.")
 
 
 def subiu_faixa(d, st):
@@ -376,10 +378,11 @@ def emitir(ev, ctx=None, aviso=None):
         saida(out)
 
 
-def pos_compact(st, raiz, extra_base):
+def pos_compact(d, st, raiz, extra_base):
     st["compactacoes"] = st.get("compactacoes", 0) + 1
     st["nivel"] = 0
-    pedir_handoff(st, raiz)
+    if not handoff_gravado(d.get("transcript_path", ""), time.time() - 30 * 60, raiz):
+        pedir_handoff(st, raiz)  # com handoff recente basta relê-lo; sem, a conferência cobra
     n = st["compactacoes"]
     if n >= 3:
         return (extra_base + f" Esta é a {n}ª compactação desta sessão: depois do handoff, continue a tarefa em curso; "
@@ -392,7 +395,7 @@ def sem_longrun(d, ev, st, raiz):
     """Sessão comum: handoff nas faixas 2 e 3 e depois de compactar, com conferência."""
     if ev == "SessionStart":
         if d.get("source") == "compact":
-            ctx, aviso = pos_compact(st, raiz, HANDOFF_POS_COMPACT)
+            ctx, aviso = pos_compact(d, st, raiz, HANDOFF_POS_COMPACT)
             salvar(d, st)
             emitir(ev, ctx, aviso)
         return
@@ -450,7 +453,7 @@ def main():
     if ev == "SessionStart":
         extra, aviso = ("", None)
         if d.get("source") == "compact":
-            extra, aviso = pos_compact(st, raiz, " " + HANDOFF_POS_COMPACT)
+            extra, aviso = pos_compact(d, st, raiz, " " + HANDOFF_POS_COMPACT)
             salvar(d, st)
         emitir(ev, f"EXECUÇÃO LONGA ATIVA neste projeto ({lista}). O contexto foi compactado ou a sessão foi retomada: "
                "antes de qualquer ação, releia goal.md → state.md → plan.md → canal.md e as últimas linhas de "

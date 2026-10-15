@@ -247,3 +247,13 @@ def test_teto_antigo_nao_dispara_mais(tmp_path):
     a = Ambiente(tmp_path)
     a.linhas(assistente(200_000))  # 21%: em 1.2.x virava faixa 3 (89% de 225 mil)
     assert a.run("PostToolUse") == {}
+
+
+def test_pos_compactacao_com_handoff_recente_nao_cobra(tmp_path):
+    a = Ambiente(tmp_path)
+    rel = "handoffs/history/2026-10-15T080000Z.md"
+    (a.proj / rel).write_text("x" * 300)
+    a.linhas(assistente(30_000), escrita(rel))
+    out = a.run("SessionStart", source="compact")
+    assert "releia" in ctx(out)
+    assert all("AINDA NÃO FOI GRAVADO" not in ctx(a.run("PostToolUse")) for _ in range(12))
