@@ -197,7 +197,7 @@
   <div class="card" style="margin-top:18px;border-color:var(--amb)"><h3>⚠️ Existem duas session-handoff: confira qual você tem</h3>
     <div class="grid g2" style="margin-top:10px">
       <div><p><b>Versão comum (só chat)</b>, a que circula em kits e repositórios de skills: mostra o resumo na conversa e não grava nada. Ao dar <code>/clear</code>, o resumo vai embora junto, a menos que você copie à mão, e o <code>/prime</code> não encontra o que ler.</p></div>
-      <div><p><b>Versão INEMA (grava em arquivo)</b>, do kit <a href="https://github.com/inematds/agente-claude-codex" target="_blank" rel="noopener">agente-claude-codex</a> (1.2.1): mostra no chat <b>e</b> grava em <code>handoffs/</code>; cria a pasta se o projeto só tiver <code>CLAUDE.md</code>. Funciona no Claude Code (<code>~/.claude/skills</code>) e no Codex (<code>~/.agents/skills</code>), com o <code>/prime</code> como par.</p></div>
+      <div><p><b>Versão INEMA (grava em arquivo)</b>, do kit <a href="https://github.com/inematds/agente-claude-codex" target="_blank" rel="noopener">agente-claude-codex</a> (1.4.2), também no <a href="https://inematds.github.io/skillmanager3x/guia/" target="_blank" rel="noopener">skillmanager3x</a>, com <code>latest.md</code> como índice de abertos: mostra no chat <b>e</b> grava em <code>handoffs/</code>; cria a pasta se o projeto só tiver <code>CLAUDE.md</code>. Funciona no Claude Code (<code>~/.claude/skills</code>) e no Codex (<code>~/.agents/skills</code>), com o <code>/prime</code> como par.</p></div>
     </div>
     <pre><span class="c"># 0 = versão só chat; 1 ou mais = grava em handoffs/</span>
 <span class="k">grep</span> -c <span class="s">"handoffs/history"</span> ~/.claude/skills/session-handoff/SKILL.md
@@ -382,6 +382,7 @@ scripts/sync-skills.sh install prime --all --apply --replace</pre>
   <span class="chip">Relacionados</span>
   <h2>Outros projetos do INEMA sobre o tema</h2>
   <div class="grid g3" style="margin-top:20px">
+    <a class="card" href="https://inematds.github.io/skillmanager3x/guia/" target="_blank" rel="noopener"><h3>🗂️ skillmanager3x</h3><p>As skills session-handoff e prime que este hook aciona: gravam e retomam o handoff.</p></a>
     <a class="card" href="https://inematds.github.io/agente-claude-codex/guia/" target="_blank" rel="noopener"><h3>🧠 agente-claude-codex</h3><p>Núcleo portátil e handoff entre sessões e agentes.</p></a>
     <a class="card" href="https://inematds.github.io/claude-session-kit/guia/" target="_blank" rel="noopener"><h3>🧰 claude-session-kit</h3><p>Statusline, checkpoints e handoff antes do /clear.</p></a>
     <a class="card" href="https://inematds.github.io/loop-r/guia/" target="_blank" rel="noopener"><h3>🔁 loop-r</h3><p>Loops autoaperfeiçoáveis com evidência e rollback.</p></a>
