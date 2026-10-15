@@ -133,6 +133,31 @@ def test_clear_aponta_ultimo_handoff(tmp_path):
     assert "handoffs/history/2026-10-15T010000Z.md" in ctx(out)
 
 
+def test_clear_lista_indice_de_abertos(tmp_path):
+    a = Ambiente(tmp_path)
+    h = a.proj / "handoffs/history"
+    (h / "2026-10-15T010000Z-rea-es.md").write_text("a" * 300)
+    (h / "2026-10-15T020000Z-cerebro.md").write_text("b" * 300)
+    (a.proj / "handoffs/latest.md").write_text(
+        "# Handoffs\n\n<!-- handoff-indice:inicio -->\n"
+        "- `cerebro` · handoffs/history/2026-10-15T020000Z-cerebro.md · 15/10 02:00\n"
+        "- `rea-es` · handoffs/history/2026-10-15T010000Z-rea-es.md · 15/10 01:00\n"
+        "<!-- handoff-indice:fim -->\n")
+    c = ctx(a.run("SessionStart", source="clear"))
+    assert "cerebro → handoffs/history/2026-10-15T020000Z-cerebro.md" in c and "rea-es →" in c
+
+
+def test_clear_avisa_carimbo_inventado_so_no_futuro(tmp_path):
+    a = Ambiente(tmp_path)
+    h = a.proj / "handoffs/history"
+    futuro = h / "2099-01-01T120000Z-x.md"
+    futuro.write_text("a" * 300)
+    velho = h / "2001-01-01T000000Z-y.md"  # clone renova o mtime: nome antigo é normal
+    velho.write_text("a" * 300)
+    c = ctx(a.run("SessionStart", source="clear"))
+    assert "inventado" in c and futuro.name in c and velho.name not in c.split("inventado")[1]
+
+
 def test_estado_antigo_numero_puro(tmp_path):
     a = Ambiente(tmp_path)
     a.estado.mkdir()

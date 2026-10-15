@@ -42,7 +42,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.1.0"
+VERSAO = "1.2.0"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -187,7 +187,7 @@ def hora(epoch):
 
 
 # ---------- regras ----------
-HANDOFF = ("grave o handoff AGORA com a skill session-handoff (handoffs/history/<UTC>.md + handoffs/latest.md), "
+HANDOFF = ("grave o handoff AGORA com a skill session-handoff (script handoff-grava.py, mesmo --assunto do índice), "
            "sem esperar o usuário pedir: o cache ainda está quente e ler o histórico sai barato. Depois avise em uma linha "
            "que gravou e continue o trabalho.")
 HANDOFF_POS_COMPACT = ("Se nesta sessão ainda não foi gravado um handoff depois da última tarefa concluída, grave-o agora "
@@ -265,15 +265,60 @@ def ultimo_handoff(raiz):
     return arqs[-1] if arqs else None
 
 
+RE_INDICE = re.compile(r"^- `([a-z0-9-]+)` · (handoffs/history/[^ ]+\.md) · (.+)$")
+RE_CARIMBO = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{6}Z)")
+
+
+def indice_abertos(raiz):
+    """[(slug, caminho, quando)] do índice do latest.md (handoff-grava.py); [] se não houver índice."""
+    try:
+        txt = (pathlib.Path(raiz) / "handoffs" / "latest.md").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    if "<!-- handoff-indice:inicio -->" not in txt:
+        return []
+    bloco = txt.split("<!-- handoff-indice:inicio -->", 1)[1].split("<!-- handoff-indice:fim -->", 1)[0]
+    return [m.groups() for m in (RE_INDICE.match(ln.strip()) for ln in bloco.splitlines()) if m]
+
+
+def carimbos_falsos(raiz, folga=600):
+    """Snapshots cujo nome diz uma hora POSTERIOR à gravação (carimbo inventado). Nome anterior é normal
+    (clone/checkout renova o mtime)."""
+    ruins = []
+    for p in (pathlib.Path(raiz) / "handoffs" / "history").glob("*.md"):
+        m = RE_CARIMBO.match(p.name)
+        if not m:
+            continue
+        try:
+            nome = datetime.datetime.strptime(m[1], "%Y-%m-%dT%H%M%SZ").replace(
+                tzinfo=datetime.timezone.utc).timestamp()
+            if nome > p.stat().st_mtime + folga:
+                ruins.append(p.name)
+        except (ValueError, OSError):
+            continue
+    return sorted(ruins)
+
+
 def ao_limpar(d, raiz):
-    p = ultimo_handoff(raiz)
-    if not p:
-        return
-    saida({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext":
-        f"Sessão limpa. Último handoff deste projeto: {p.relative_to(raiz)} (gravado em "
-        f"{time.strftime('%d/%m %H:%M', time.localtime(p.stat().st_mtime))}; outras sessões podem gravar no mesmo "
-        "projeto). Se o primeiro pedido do usuário continuar aquele trabalho, leia-o com a skill prime antes de agir; "
-        "não retome publicação, envio ou deploy por conta própria."}})
+    abertos = indice_abertos(raiz)
+    falsos = carimbos_falsos(raiz)
+    aviso = (f" Atenção: carimbo no nome posterior à gravação (inventado) em {', '.join(falsos)}; "
+             "não confie na ordem pelo nome.") if falsos else ""
+    if abertos:
+        lista = "; ".join(f"{s} → {c} ({q})" for s, c, q in abertos)
+        texto = (f"Sessão limpa. Trabalhos abertos neste projeto (índice do handoffs/latest.md): {lista}. "
+                 "Outras sessões podem estar trabalhando no mesmo projeto. Se o primeiro pedido do usuário continuar "
+                 "um deles, leia-o com a skill prime antes de agir; não retome publicação, envio ou deploy por "
+                 "conta própria." + aviso)
+    else:
+        p = ultimo_handoff(raiz)
+        if not p:
+            return
+        texto = (f"Sessão limpa. Último handoff deste projeto: {p.relative_to(raiz)} (gravado em "
+                 f"{time.strftime('%d/%m %H:%M', time.localtime(p.stat().st_mtime))}; outras sessões podem gravar "
+                 "no mesmo projeto). Se o primeiro pedido do usuário continuar aquele trabalho, leia-o com a skill "
+                 "prime antes de agir; não retome publicação, envio ou deploy por conta própria." + aviso)
+    saida({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": texto}})
 
 
 def continuo(d, st, raiz):
@@ -293,7 +338,7 @@ def continuo(d, st, raiz):
     pedir_handoff(st, raiz)  # a conferência confirma nos próximos eventos
     return (f"Handoff contínuo: contexto em {tok // 1000} mil tokens e nenhum handoff desta sessão nos últimos "
             f"{intervalo // 60} min. Antes de parar, atualize o handoff com a skill session-handoff "
-            "(handoffs/history/<UTC>.md + handoffs/latest.md): com o cache quente sai barato. Não comece trabalho novo; "
+            "(script handoff-grava.py, mesmo --assunto do índice do latest.md): com o cache quente sai barato. Não comece trabalho novo; "
             "termine com uma linha \"Handoff atualizado: <arquivo>\".")
 
 
