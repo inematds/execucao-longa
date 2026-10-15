@@ -1,0 +1,150 @@
+"""Testes do hook-longrun: faixas sobre o teto, handoff conferido, compactações, pausa e /clear."""
+import json, os, pathlib, subprocess, sys, time, datetime
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+HOOK = ROOT / "tools" / "hook-longrun.py"
+
+
+def iso(epoch):
+    return datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def assistente(tokens, quando=None, model="claude-opus-5-5"):
+    return {"type": "assistant", "timestamp": iso(quando or time.time()),
+            "message": {"model": model, "content": [{"type": "text", "text": "ok"}],
+                        "usage": {"input_tokens": 10, "cache_read_input_tokens": tokens - 10, "cache_creation_input_tokens": 0}}}
+
+
+def escrita(rel, quando=None):
+    return {"type": "assistant", "timestamp": iso(quando or time.time()),
+            "message": {"model": "claude-opus-5-5", "content": [
+                {"type": "tool_use", "name": "Write", "input": {"file_path": f"/x/{rel}", "content": "..."}}]}}
+
+
+class Ambiente:
+    def __init__(self, tmp, handoffs=True):
+        self.proj = tmp / "proj"
+        self.proj.mkdir()
+        if handoffs:
+            (self.proj / "handoffs" / "history").mkdir(parents=True)
+        self.estado = tmp / "estado"
+        self.tr = tmp / "t.jsonl"
+        self.tr.write_text("")
+
+    def linhas(self, *regs):
+        with open(self.tr, "a") as f:
+            for r in regs:
+                f.write(json.dumps(r) + "\n")
+
+    def run(self, ev, **extra):
+        d = {"hook_event_name": ev, "cwd": str(self.proj), "session_id": "s1", "transcript_path": str(self.tr), **extra}
+        env = {**os.environ, "LONGRUN_ESTADO": str(self.estado)}
+        env.pop("LONGRUN_JANELA", None)
+        r = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(d), capture_output=True, text=True, env=env, timeout=30)
+        assert r.returncode == 0, r.stderr
+        return json.loads(r.stdout) if r.stdout.strip() else {}
+
+
+def ctx(out):
+    return (out.get("hookSpecificOutput") or {}).get("additionalContext", "")
+
+
+def test_faixa2_dispara_sobre_o_teto_e_nao_sobre_1M(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(170_000))  # 17% de 1M, 76% do teto de 225 mil
+    out = a.run("PostToolUse")
+    assert "grave o handoff AGORA" in ctx(out)
+    assert a.run("PostToolUse") == {}  # uma vez por faixa
+
+
+def test_abaixo_da_faixa_nao_avisa(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(120_000))
+    assert a.run("PostToolUse") == {}
+
+
+def test_handoff_conferido(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(170_000))
+    a.run("PostToolUse")
+    rel = "handoffs/history/2026-10-15T050000Z.md"
+    (a.proj / rel).write_text("x" * 300)
+    a.linhas(escrita(rel))
+    out = a.run("PostToolUse")
+    assert "Handoff conferido" in out.get("systemMessage", "")
+
+
+def test_handoff_vazio_nao_conta(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(170_000))
+    a.run("PostToolUse")
+    rel = "handoffs/history/2026-10-15T050000Z.md"
+    (a.proj / rel).write_text("curto")
+    a.linhas(escrita(rel))
+    assert "conferido" not in a.run("PostToolUse").get("systemMessage", "")
+
+
+def test_cobra_e_depois_desiste(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(170_000))
+    a.run("PostToolUse")
+    saidas = [a.run("PostToolUse") for _ in range(30)]
+    cobrancas = [o for o in saidas if "AINDA NÃO FOI GRAVADO" in ctx(o)]
+    desistiu = [o for o in saidas if "NÃO foi gravado" in o.get("systemMessage", "")]
+    assert len(cobrancas) == 2 and len(desistiu) == 1
+
+
+def test_sem_pasta_handoffs_nao_cobra(tmp_path):
+    a = Ambiente(tmp_path, handoffs=False)
+    a.linhas(assistente(170_000))
+    a.run("PostToolUse")
+    assert all(a.run("PostToolUse") == {} for _ in range(20))
+
+
+def test_terceira_compactacao_pede_sessao_nova(tmp_path):
+    a = Ambiente(tmp_path)
+    outs = [a.run("SessionStart", source="compact") for _ in range(3)]
+    assert "sessão nova" not in ctx(outs[1])
+    assert "3ª compactação" in ctx(outs[2]) and "/clear" in outs[2].get("systemMessage", "")
+
+
+def test_pausa_bloqueia_uma_vez(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(200_000, quando=time.time() - 2 * 3600))
+    out = a.run("UserPromptSubmit", prompt="oi")
+    assert out.get("decision") == "block" and "cache venceu" in out["reason"]
+    assert a.run("UserPromptSubmit", prompt="oi").get("decision") is None  # reenviar passa
+
+
+def test_pausa_curta_ou_contexto_pequeno_nao_bloqueia(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(200_000, quando=time.time() - 20 * 60))
+    assert a.run("UserPromptSubmit", prompt="oi").get("decision") is None
+    (tmp_path / "b").mkdir()
+    b = Ambiente(tmp_path / "b")
+    b.linhas(assistente(90_000, quando=time.time() - 3 * 3600))
+    assert b.run("UserPromptSubmit", prompt="oi").get("decision") is None
+
+
+def test_clear_aponta_ultimo_handoff(tmp_path):
+    a = Ambiente(tmp_path)
+    (a.proj / "handoffs/history/2026-10-15T010000Z.md").write_text("a" * 300)
+    out = a.run("SessionStart", source="clear")
+    assert "handoffs/history/2026-10-15T010000Z.md" in ctx(out)
+
+
+def test_estado_antigo_numero_puro(tmp_path):
+    a = Ambiente(tmp_path)
+    a.estado.mkdir()
+    (a.estado / "s1").write_text("2")
+    a.linhas(assistente(170_000))
+    assert a.run("PostToolUse") == {}  # já estava na faixa 2
+
+
+def test_longrun_faixa1_no_teto(tmp_path):
+    a = Ambiente(tmp_path)
+    lr = a.proj / "longrun" / "x"
+    lr.mkdir(parents=True)
+    (lr / "state.md").write_text("em andamento")
+    a.linhas(assistente(120_000))
+    assert "FAIXA 1 de 3" in ctx(a.run("PostToolUse"))

@@ -41,7 +41,7 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <session.jsonl> --json -
 
 1. Clone into `~/projetos/execucao-longa`.
 2. Paste [`templates/AGENTS-long-run.md`](templates/AGENTS-long-run.md) into your global `CLAUDE.md` and `AGENTS.md` — the agent follows the method without being reminded.
-3. In `~/.claude/settings.json`, hook `tools/hook-longrun.sh` to `PreCompact`, `SessionStart` (matcher `compact|resume`), `PostToolUse` and `UserPromptSubmit`. It warns the agent by **context band**: ~50% → note things in `canal.md`; ~70% → update state and `/compact`; ~85% → `/session-handoff` + fresh session + `/prime`. It also says to reread state after compacting or resuming. And set `"cleanupPeriodDays": 365` (the 30-day default deletes transcripts).
+3. In `~/.claude/settings.json`, hook `tools/hook-longrun.sh` to `PreCompact`, `SessionStart` (matcher `compact|resume|clear`), `PostToolUse` and `UserPromptSubmit`. It warns the agent by **context band**, measured against the **point where Claude Code compacts** (default ceiling 225k tokens, `LONGRUN_TETO`; Opus 5.5 compacts between 200k and 575k even with a 1M window): ~50% → note things in `canal.md`; ~70% → update state and `/compact`; ~85% → `/session-handoff` + fresh session + `/prime`. It also says to reread state after compacting or resuming. In any session it asks for a handoff at ~70%/~85% and after compacting, **checks** the transcript for a new file in `handoffs/history/` (re-asks up to 2 times, then reports "handoff verified" or "NOT saved"), asks for a fresh session on the 3rd compaction, and after 60+ min idle with 150k+ context **blocks the next message once** to warn that the cache expired (resend to continue; `/clear` starts clean and the new session points to the last handoff). And set `"cleanupPeriodDays": 365` (the 30-day default deletes transcripts).
 4. Watchdog: copy `tools/systemd/longrun-vigia.*` to `~/.config/systemd/user/` and run `systemctl --user enable --now longrun-vigia.timer` (alerts on stopped or idle runs).
 5. Cron jobs that call agents: `flock -n <lock> timeout <cap> <script>`.
 
@@ -62,7 +62,7 @@ Many small tasks and a growing backlog? Use **queue mode** (plan §5.4).
 | [`tools/novo-longrun.sh`](tools/novo-longrun.sh) | Creates a run's `longrun/` folder from the templates |
 | [`tools/loop-longrun.sh`](tools/loop-longrun.sh) | Headless loop: `codex exec` cycles with flock, timeout and memory cap; the test decides; stops on stagnation |
 | [`tools/medir-sessao.py`](tools/medir-sessao.py) | Measures a session (Codex or Claude): duration, compactions, tokens, cache, tool output, per-turn curve |
-| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Claude Code hook: context bands (50/70/85%) with a proposed action, save before compacting, reread afterwards |
+| [`tools/hook-longrun.sh`](tools/hook-longrun.sh) | Claude Code hook: context bands (50/70/85% of the compaction point), verified handoff, expired-cache warning, save before compacting, reread afterwards |
 | [`tools/vigia.py`](tools/vigia.py) | Watchdog (timer every 10 min): flags runs that stopped, stopped silently or went idle |
 | [`tools/arquivar-sessoes.py`](tools/arquivar-sessoes.py) | Hygiene: report on space used by old sessions; `--aplicar` compresses, `--restaurar` restores |
 | [`tools/recall.py`](tools/recall.py) | `recall` command: searches everything said with Codex and Claude (SQLite FTS5 index, reindexed hourly) |
