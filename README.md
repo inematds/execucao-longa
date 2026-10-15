@@ -45,6 +45,33 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sessão.jsonl> --json -
 4. Vigia: copie `tools/systemd/longrun-vigia.*` para `~/.config/systemd/user/` e rode `systemctl --user enable --now longrun-vigia.timer` (alerta execução parada ou ociosa).
 5. Crons que chamam agente: `flock -n <lock> timeout <teto> <script>`.
 
+## "Sessão parada há Xh: o cache venceu" — não é erro
+
+Ao voltar para uma sessão parada há mais de 60 min com contexto acima de 150 mil tokens, o hook (`UserPromptSubmit`, função `pausa` em `tools/hook-longrun.py`) **segura a primeira mensagem uma vez**. O cache do prompt dura ~1 h; depois disso, a próxima mensagem relê a conversa inteira sem cache e gasta muito do limite. O aviso deixa você escolher antes de pagar.
+
+Exemplo real (sessão parada há 5h33 com 220 mil tokens):
+
+```
+● UserPromptSubmit operation blocked by hook:
+  Sessão parada há 5h33: o cache venceu e esta mensagem vai reprocessar ~220 mil tokens do seu limite.
+  Para continuar aqui, reenvie a mensagem. Para começar limpo: /clear e depois /prime
+  (o último handoff do projeto é indicado na abertura).
+
+  Original prompt: ficou muito ruim, a movimentação da apresentação...
+```
+
+O que fazer:
+
+- **Continuar nesta sessão:** reenvie a mesma mensagem. Passa direto (o bloqueio vale uma vez por pausa e fica gravado no estado da sessão).
+- **Começar leve (recomendado):** `/clear` e depois `/prime`. A sessão nova lê o último handoff e repete o pedido com ~20 mil tokens em vez de 220 mil.
+
+Cada sessão é contada à parte: duas sessões paradas mostram o aviso uma vez cada. Ajuste por variável de ambiente:
+
+| Variável | Padrão | Efeito |
+|---|---|---|
+| `LONGRUN_PAUSA_MIN` | `60` | minutos parado antes de segurar (ex.: `120`) |
+| `LONGRUN_PAUSA_TOKENS` | `150000` | contexto mínimo para segurar; `0` desliga a trava |
+
 ## Use quando / não use quando
 
 | ✅ Use | ❌ Não use (ou quebre em sessões menores) |
