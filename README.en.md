@@ -45,6 +45,33 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <session.jsonl> --json -
 4. Watchdog: copy `tools/systemd/longrun-vigia.*` to `~/.config/systemd/user/` and run `systemctl --user enable --now longrun-vigia.timer` (alerts on stopped or idle runs).
 5. Cron jobs that call agents: `flock -n <lock> timeout <cap> <script>`.
 
+## "Sessão parada há Xh: o cache venceu" (session idle, cache expired) is not an error
+
+When you return to a session idle for more than 60 min with more than 150k tokens of context, the hook (`UserPromptSubmit`, function `pausa` in `tools/hook-longrun.py`) **holds the first message once**. The prompt cache lasts ~1 h; after that, the next message rereads the whole conversation uncached and burns a lot of your limit. The warning lets you choose before paying.
+
+Real example (session idle for 5h33 with 220k tokens; the hook message is in Portuguese):
+
+```
+● UserPromptSubmit operation blocked by hook:
+  Sessão parada há 5h33: o cache venceu e esta mensagem vai reprocessar ~220 mil tokens do seu limite.
+  Para continuar aqui, reenvie a mensagem. Para começar limpo: /clear e depois /prime
+  (o último handoff do projeto é indicado na abertura).
+
+  Original prompt: ficou muito ruim, a movimentação da apresentação...
+```
+
+What to do:
+
+- **Keep going in this session:** resend the same message. It goes through (the hold applies once per pause and is saved in the session state).
+- **Start light (recommended):** `/clear` then `/prime`. The new session reads the latest handoff and you repeat the request with ~20k tokens instead of 220k.
+
+Each session counts separately: two idle sessions show the warning once each. Tune it with environment variables:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `LONGRUN_PAUSA_MIN` | `60` | idle minutes before holding (e.g. `120`) |
+| `LONGRUN_PAUSA_TOKENS` | `150000` | minimum context to hold; `0` turns it off |
+
 ## Use when / don't use when
 
 | ✅ Use | ❌ Don't (or split into smaller sessions) |

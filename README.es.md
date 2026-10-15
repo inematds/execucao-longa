@@ -45,6 +45,33 @@ python3 ~/projetos/execucao-longa/tools/medir-sessao.py <sesión.jsonl> --json -
 4. Vigía: copia `tools/systemd/longrun-vigia.*` a `~/.config/systemd/user/` y corre `systemctl --user enable --now longrun-vigia.timer` (avisa ejecuciones detenidas u ociosas).
 5. Crons que llaman agentes: `flock -n <lock> timeout <tope> <script>`.
 
+## "Sessão parada há Xh: o cache venceu" (sesión detenida, caché vencido) no es un error
+
+Al volver a una sesión detenida hace más de 60 min con más de 150 mil tokens de contexto, el hook (`UserPromptSubmit`, función `pausa` en `tools/hook-longrun.py`) **retiene el primer mensaje una vez**. El caché del prompt dura ~1 h; después, el siguiente mensaje relee toda la conversación sin caché y gasta mucho del límite. El aviso te deja elegir antes de pagar.
+
+Ejemplo real (sesión detenida hace 5h33 con 220 mil tokens; el aviso del hook está en portugués):
+
+```
+● UserPromptSubmit operation blocked by hook:
+  Sessão parada há 5h33: o cache venceu e esta mensagem vai reprocessar ~220 mil tokens do seu limite.
+  Para continuar aqui, reenvie a mensagem. Para começar limpo: /clear e depois /prime
+  (o último handoff do projeto é indicado na abertura).
+
+  Original prompt: ficou muito ruim, a movimentação da apresentação...
+```
+
+Qué hacer:
+
+- **Seguir en esta sesión:** reenvía el mismo mensaje. Pasa directo (la retención vale una vez por pausa y queda guardada en el estado de la sesión).
+- **Empezar liviano (recomendado):** `/clear` y luego `/prime`. La sesión nueva lee el último handoff y repites el pedido con ~20 mil tokens en lugar de 220 mil.
+
+Cada sesión cuenta aparte: dos sesiones detenidas muestran el aviso una vez cada una. Ajuste por variable de entorno:
+
+| Variable | Por defecto | Efecto |
+|---|---|---|
+| `LONGRUN_PAUSA_MIN` | `60` | minutos detenido antes de retener (ej.: `120`) |
+| `LONGRUN_PAUSA_TOKENS` | `150000` | contexto mínimo para retener; `0` lo desactiva |
+
 ## Úsalo cuando / no lo uses cuando
 
 | ✅ Úsalo | ❌ No lo uses (o divide en sesiones más cortas) |
