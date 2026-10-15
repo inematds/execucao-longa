@@ -14,7 +14,7 @@ Em QUALQUER sessão (sem longrun ativo):
       grande, BLOQUEIA uma vez o envio e explica: reenviar continua (relendo tudo sem cache) ou /clear limpa.
   SessionStart (clear)          → aponta o último handoff do projeto para o agente ler com /prime se o pedido
       continuar aquele trabalho.
-  Stop (handoff contínuo)       → ao fim de uma resposta, com contexto ≥ 150 mil tokens e nenhum handoff gravado
+  Stop (handoff contínuo)       → ao fim de uma resposta, com contexto ≥ 200 mil tokens (piso da compactação por ociosidade) e nenhum handoff gravado
       por ESTA sessão nos últimos 30 min, devolve "block" uma vez: o agente atualiza o handoff com o cache quente
       (~20 mil tokens equivalentes contra 250–400 mil de releitura fria depois de parado). No máximo 1 pedido a cada
       30 min por sessão; nunca quando o próprio Stop já fez o agente continuar (stop_hook_active). Só em projeto com
@@ -30,19 +30,21 @@ Com longrun/*/state.md sem "concluído" no projeto, valem as mensagens de execu�
       faixa 2: atualizar estado e pedir /compact
       faixa 3: handoff + seguir a tarefa em curso; sessão nova + /prime só quando ela terminar
 
-A % é calculada sobre o TETO, não sobre a janela do modelo: o Claude Code compacta o Opus 5.5 entre 200 e
-575 mil tokens (mediana 254 mil, 93 compactações de 07 a 15/10/2026) mesmo com janela de 1 milhão; sobre
-1 milhão as faixas de 70/85% nunca disparavam. Teto padrão 225 mil → faixas em ~112/157/191 mil.
+A % é calculada sobre o ponto em que o Claude Code compacta por TAMANHO: ~967 mil nos modelos de 1M (doc
+settings-reference; CLAUDE_CODE_AUTO_COMPACT_WINDOW ou LONGRUN_TETO mudam) → faixas em ~484/677/822 mil.
+As 93 compactações do Opus 5.5 de 07 a 15/10/2026 entre 200 e 575 mil NÃO eram por tamanho: todas vieram
+53–58 min depois da última resposta (compactação por OCIOSIDADE, antes do cache de 1 h vencer, só acima de
+~200 mil). O 1.2.x usava teto de 225 mil por ter lido isso errado, e as faixas disparavam no meio do trabalho.
 Depois de uma compactação a % cai e as faixas voltam a valer.
 
-Ajustes por ambiente: LONGRUN_FAIXAS="50,70,85"  LONGRUN_TETO=225000  LONGRUN_JANELA=<força a janela>
+Ajustes por ambiente: LONGRUN_FAIXAS="50,70,85"  LONGRUN_TETO=<tokens>  LONGRUN_JANELA=<força a janela>
   LONGRUN_PAUSA_MIN=60  LONGRUN_PAUSA_TOKENS=150000 (0 desliga o bloqueio)  LONGRUN_DEBUG=<arquivo>
-  LONGRUN_CONTINUO_TOKENS=150000 (0 desliga o handoff contínuo)  LONGRUN_CONTINUO_MIN=30
+  LONGRUN_CONTINUO_TOKENS=200000 (0 desliga o handoff contínuo)  LONGRUN_CONTINUO_MIN=30
 O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar uma chamada de ferramenta depois.
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.2.1"
+VERSAO = "1.3.1"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -111,6 +113,15 @@ def fim_transcricao(transcript, tamanho=2 << 20):
         return [], True
 
 
+def ponto_compactacao(janela):
+    """Onde o Claude Code compacta por TAMANHO: LONGRUN_TETO, senão CLAUDE_CODE_AUTO_COMPACT_WINDOW (documentado,
+    100 mil..janela), senão ~96,7% da janela (doc: "about 967K tokens on native 1M models")."""
+    teto = env_int("LONGRUN_TETO", 0) or env_int("CLAUDE_CODE_AUTO_COMPACT_WINDOW", 0)
+    if teto:
+        return max(100_000, min(teto, janela))
+    return janela * 967 // 1000
+
+
 def uso_contexto(transcript):
     """(tokens, janela efetiva) do último usage da transcrição; lê só o fim do arquivo."""
     for janela_leitura in (2 << 20, 32 << 20):
@@ -126,7 +137,7 @@ def uso_contexto(transcript):
             tok = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
             modelo = (m.get("model") or "").lower()
             janela = env_int("LONGRUN_JANELA", 0) or (200_000 if "haiku" in modelo and tok <= 200_000 else 1_000_000)
-            return tok, min(janela, env_int("LONGRUN_TETO", 225_000) or janela)
+            return tok, ponto_compactacao(janela)
         if inteiro:
             break
     return 0, 0
@@ -335,7 +346,7 @@ def ao_limpar(d, raiz):
 
 def continuo(d, st, raiz):
     """Stop: pede UMA atualização do handoff com o cache quente; None se não for hora."""
-    minimo = env_int("LONGRUN_CONTINUO_TOKENS", 150_000)
+    minimo = env_int("LONGRUN_CONTINUO_TOKENS", 200_000)
     if not minimo or d.get("stop_hook_active") or not (pathlib.Path(raiz) / "handoffs").is_dir():
         return None
     intervalo = env_int("LONGRUN_CONTINUO_MIN", 30) * 60

@@ -49,9 +49,9 @@ def ctx(out):
     return (out.get("hookSpecificOutput") or {}).get("additionalContext", "")
 
 
-def test_faixa2_dispara_sobre_o_teto_e_nao_sobre_1M(tmp_path):
+def test_faixa2_dispara_sobre_o_ponto_de_compactacao(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(170_000))  # 17% de 1M, 76% do teto de 225 mil
+    a.linhas(assistente(730_000))  # 75% do ponto de compactação (~967 mil); com o teto antigo de 225 mil seria 324%
     out = a.run("PostToolUse")
     assert "grave o handoff AGORA" in ctx(out)
     assert a.run("PostToolUse") == {}  # uma vez por faixa
@@ -59,13 +59,13 @@ def test_faixa2_dispara_sobre_o_teto_e_nao_sobre_1M(tmp_path):
 
 def test_abaixo_da_faixa_nao_avisa(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(120_000))
+    a.linhas(assistente(520_000))
     assert a.run("PostToolUse") == {}
 
 
 def test_handoff_conferido(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(170_000))
+    a.linhas(assistente(730_000))
     a.run("PostToolUse")
     rel = "handoffs/history/2026-10-15T050000Z.md"
     (a.proj / rel).write_text("x" * 300)
@@ -76,7 +76,7 @@ def test_handoff_conferido(tmp_path):
 
 def test_handoff_pelo_script_conferido(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(170_000))
+    a.linhas(assistente(730_000))
     a.run("PostToolUse")
     (a.proj / "handoffs/history/2026-10-15T050000Z-x.md").write_text("x" * 300)
     a.linhas({"type": "assistant", "timestamp": iso(time.time()), "message": {"model": "claude-opus-5-5", "content": [
@@ -87,7 +87,7 @@ def test_handoff_pelo_script_conferido(tmp_path):
 
 def test_handoff_vazio_nao_conta(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(170_000))
+    a.linhas(assistente(730_000))
     a.run("PostToolUse")
     rel = "handoffs/history/2026-10-15T050000Z.md"
     (a.proj / rel).write_text("curto")
@@ -97,7 +97,7 @@ def test_handoff_vazio_nao_conta(tmp_path):
 
 def test_cobra_e_depois_desiste(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(170_000))
+    a.linhas(assistente(730_000))
     a.run("PostToolUse")
     saidas = [a.run("PostToolUse") for _ in range(30)]
     cobrancas = [o for o in saidas if "AINDA NÃO FOI GRAVADO" in ctx(o)]
@@ -107,7 +107,7 @@ def test_cobra_e_depois_desiste(tmp_path):
 
 def test_sem_pasta_handoffs_nao_cobra(tmp_path):
     a = Ambiente(tmp_path, handoffs=False)
-    a.linhas(assistente(170_000))
+    a.linhas(assistente(730_000))
     a.run("PostToolUse")
     assert all(a.run("PostToolUse") == {} for _ in range(20))
 
@@ -182,13 +182,13 @@ def test_estado_antigo_numero_puro(tmp_path):
     a = Ambiente(tmp_path)
     a.estado.mkdir()
     (a.estado / "s1").write_text("2")
-    a.linhas(assistente(170_000))
+    a.linhas(assistente(730_000))
     assert a.run("PostToolUse") == {}  # já estava na faixa 2
 
 
 def test_continuo_pede_uma_vez_e_respeita_intervalo(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(160_000))
+    a.linhas(assistente(260_000))
     out = a.run("Stop")
     assert out.get("decision") == "block" and "Handoff contínuo" in out["reason"]
     assert a.run("Stop") == {}  # 1 pedido a cada 30 min
@@ -196,7 +196,7 @@ def test_continuo_pede_uma_vez_e_respeita_intervalo(tmp_path):
 
 def test_continuo_nao_repete_quando_o_stop_ja_fez_continuar(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(160_000))
+    a.linhas(assistente(260_000))
     assert a.run("Stop", stop_hook_active=True) == {}
 
 
@@ -204,7 +204,7 @@ def test_continuo_pula_com_handoff_recente_ou_contexto_pequeno(tmp_path):
     a = Ambiente(tmp_path)
     rel = "handoffs/history/2026-10-15T060000Z.md"
     (a.proj / rel).write_text("x" * 300)
-    a.linhas(assistente(160_000), escrita(rel))
+    a.linhas(assistente(260_000), escrita(rel))
     assert a.run("Stop") == {}
     (tmp_path / "b").mkdir()
     b = Ambiente(tmp_path / "b")
@@ -212,13 +212,13 @@ def test_continuo_pula_com_handoff_recente_ou_contexto_pequeno(tmp_path):
     assert b.run("Stop") == {}
     (tmp_path / "c").mkdir()
     c = Ambiente(tmp_path / "c", handoffs=False)
-    c.linhas(assistente(160_000))
+    c.linhas(assistente(260_000))
     assert c.run("Stop") == {}
 
 
 def test_continuo_depois_confere_o_handoff(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(155_000))
+    a.linhas(assistente(255_000))
     a.run("Stop")
     rel = "handoffs/history/2026-10-15T070000Z.md"
     (a.proj / rel).write_text("x" * 300)
@@ -231,13 +231,19 @@ def test_longrun_faixa1_no_teto(tmp_path):
     lr = a.proj / "longrun" / "x"
     lr.mkdir(parents=True)
     (lr / "state.md").write_text("em andamento")
-    a.linhas(assistente(120_000))
+    a.linhas(assistente(520_000))
     assert "FAIXA 1 de 3" in ctx(a.run("PostToolUse"))
 
 
 def test_faixa3_nao_manda_parar_a_tarefa(tmp_path):
     a = Ambiente(tmp_path)
-    a.linhas(assistente(200_000))
+    a.linhas(assistente(860_000))
     texto = ctx(a.run("PostToolUse"))
     assert "CONTINUE a tarefa" in texto and "Não abra trabalho novo" not in texto
     assert texto.count("Depois avise") == 1
+
+
+def test_teto_antigo_nao_dispara_mais(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(200_000))  # 21%: em 1.2.x virava faixa 3 (89% de 225 mil)
+    assert a.run("PostToolUse") == {}
