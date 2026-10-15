@@ -161,7 +161,7 @@ def handoff_gravado(transcript, desde, raiz):
     """Caminho do handoff gravado por ESTA sessão depois de `desde`, conferido no disco; None se não houver."""
     linhas, _ = fim_transcricao(transcript, 8 << 20)
     for ln in reversed(linhas):
-        if b"handoffs/history/" not in ln or b'"tool_use"' not in ln:
+        if (b"handoffs/history/" not in ln and b"handoff-grava" not in ln) or b'"tool_use"' not in ln:
             continue
         try:
             reg = json.loads(ln)
@@ -172,7 +172,12 @@ def handoff_gravado(transcript, desde, raiz):
         for c in (reg.get("message") or {}).get("content") or []:
             if not isinstance(c, dict) or c.get("type") != "tool_use":
                 continue
-            for rel in RE_HIST.findall(json.dumps(c.get("input", {}), ensure_ascii=False)):
+            entrada = json.dumps(c.get("input", {}), ensure_ascii=False)
+            if "handoff-grava" in entrada:  # o script escolhe o nome: vale o snapshot mais novo gravado depois
+                p = ultimo_handoff(raiz)
+                if p and p.stat().st_size >= 200 and p.stat().st_mtime >= desde - 5:
+                    return str(p.relative_to(raiz))
+            for rel in RE_HIST.findall(entrada):
                 p = pathlib.Path(raiz) / rel
                 try:
                     if p.stat().st_size >= 200 and p.stat().st_mtime >= desde - 5:

@@ -74,6 +74,17 @@ def test_handoff_conferido(tmp_path):
     assert "Handoff conferido" in out.get("systemMessage", "")
 
 
+def test_handoff_pelo_script_conferido(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(170_000))
+    a.run("PostToolUse")
+    (a.proj / "handoffs/history/2026-10-15T050000Z-x.md").write_text("x" * 300)
+    a.linhas({"type": "assistant", "timestamp": iso(time.time()), "message": {"model": "claude-opus-5-5", "content": [
+        {"type": "tool_use", "name": "Bash",
+         "input": {"command": "python3 ~/.claude/skills/session-handoff/scripts/handoff-grava.py --assunto x <<EOF"}}]}})
+    assert "Handoff conferido" in a.run("PostToolUse").get("systemMessage", "")
+
+
 def test_handoff_vazio_nao_conta(tmp_path):
     a = Ambiente(tmp_path)
     a.linhas(assistente(170_000))
