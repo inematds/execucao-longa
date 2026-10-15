@@ -233,3 +233,11 @@ def test_longrun_faixa1_no_teto(tmp_path):
     (lr / "state.md").write_text("em andamento")
     a.linhas(assistente(120_000))
     assert "FAIXA 1 de 3" in ctx(a.run("PostToolUse"))
+
+
+def test_faixa3_nao_manda_parar_a_tarefa(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(200_000))
+    texto = ctx(a.run("PostToolUse"))
+    assert "CONTINUE a tarefa" in texto and "Não abra trabalho novo" not in texto
+    assert texto.count("Depois avise") == 1

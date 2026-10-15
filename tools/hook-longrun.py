@@ -28,7 +28,7 @@ Com longrun/*/state.md sem "concluído" no projeto, valem as mensagens de execu�
   PostToolUse / UserPromptSubmit → faixas de uso do contexto (padrão 50/70/85%), uma vez por faixa por sessão:
       faixa 1: registrar conhecimento no canal.md
       faixa 2: atualizar estado e pedir /compact
-      faixa 3: parar de abrir trabalho novo; /session-handoff + sessão nova + /prime
+      faixa 3: handoff + seguir a tarefa em curso; sessão nova + /prime só quando ela terminar
 
 A % é calculada sobre o TETO, não sobre a janela do modelo: o Claude Code compacta o Opus 5.5 entre 200 e
 575 mil tokens (mediana 254 mil, 93 compactações de 07 a 15/10/2026) mesmo com janela de 1 milhão; sobre
@@ -42,7 +42,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.2.0"
+VERSAO = "1.2.1"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -195,6 +195,8 @@ def hora(epoch):
 HANDOFF = ("grave o handoff AGORA com a skill session-handoff (script handoff-grava.py, mesmo --assunto do índice), "
            "sem esperar o usuário pedir: o cache ainda está quente e ler o histórico sai barato. Depois avise em uma linha "
            "que gravou e continue o trabalho.")
+SEGUIR = (" Depois avise em uma linha e CONTINUE a tarefa que o usuário pediu até o fim: o handoff não encerra a sessão, "
+          "não pare no meio nem peça /clear agora. Só quando a tarefa terminar, sugira sessão nova + /prime.")
 HANDOFF_POS_COMPACT = ("Se nesta sessão ainda não foi gravado um handoff depois da última tarefa concluída, grave-o agora "
                        "com a skill session-handoff a partir do resumo (sem esperar pedido) e avise em uma linha.")
 
@@ -347,9 +349,10 @@ def continuo(d, st, raiz):
     st["continuo"] = agora
     pedir_handoff(st, raiz)  # a conferência confirma nos próximos eventos
     return (f"Handoff contínuo: contexto em {tok // 1000} mil tokens e nenhum handoff desta sessão nos últimos "
-            f"{intervalo // 60} min. Antes de parar, atualize o handoff com a skill session-handoff "
-            "(script handoff-grava.py, mesmo --assunto do índice do latest.md): com o cache quente sai barato. Não comece trabalho novo; "
-            "termine com uma linha \"Handoff atualizado: <arquivo>\".")
+            f"{intervalo // 60} min. Atualize o handoff com a skill session-handoff "
+            "(script handoff-grava.py, mesmo --assunto do índice do latest.md): com o cache quente sai barato. "
+            "Se você só parou para esperar algo ou terminou a tarefa, termine com uma linha \"Handoff atualizado: <arquivo>\". "
+            "Se parou no meio de uma tarefa pedida pelo usuário que ainda dá para continuar, grave e continue nela.")
 
 
 def emitir(ev, ctx=None, aviso=None):
@@ -368,8 +371,9 @@ def pos_compact(st, raiz, extra_base):
     pedir_handoff(st, raiz)
     n = st["compactacoes"]
     if n >= 3:
-        return (extra_base + f" Esta é a {n}ª compactação desta sessão: depois do handoff, peça ao usuário sessão nova "
-                "(/clear + /prime), porque cada resumo perde detalhe."), f"{n}ª compactação: hora de handoff + /clear + /prime."
+        return (extra_base + f" Esta é a {n}ª compactação desta sessão: depois do handoff, continue a tarefa em curso; "
+                "quando ela terminar, sugira ao usuário sessão nova (/clear + /prime), porque cada resumo perde detalhe."), \
+            f"{n}ª compactação: ao fim da tarefa, hora de /clear + /prime."
     return extra_base, None
 
 
@@ -395,8 +399,7 @@ def sem_longrun(d, ev, st, raiz):
         if nivel == 2:
             ctx = f"{medida} Terminada a ação em curso, " + HANDOFF
         else:
-            ctx = (f"{medida} Não abra trabalho novo: " + HANDOFF.replace(" e continue o trabalho.", ".")
-                   + " Sugira ao usuário sessão nova + /prime.")
+            ctx = (f"{medida} " + HANDOFF.replace(" Depois avise em uma linha que gravou e continue o trabalho.", "") + SEGUIR)
         salvar(d, st)
         emitir(ev, ctx, f"Contexto em {pct:.0f}% do ponto de compactação: o agente vai gravar o handoff.")
     salvar(d, st)
@@ -470,7 +473,7 @@ def main():
             "e grave o handoff agora (skill session-handoff, sem esperar pedido); depois avise o usuário que é hora de rodar /compact (compactar cedo resume melhor do que o automático perto do limite).",
             f"Execução longa em {pct:.0f}% do ponto de compactação: hora de /compact (o agente foi avisado)."),
         3: (f"{medida} FAIXA 3 de 3: não abra trabalho novo. Atualize state.md, progress.md e {canal} e peça ao usuário: "
-            "/session-handoff, sessão nova e /prime (ou releitura da pasta longrun/). Sem humano por perto, siga só até o próximo checkpoint.",
+            "/session-handoff, sessão nova e /prime (ou releitura da pasta longrun/) ao fim da unidade em curso, sem largá-la no meio. Sem humano por perto, siga só até o próximo checkpoint.",
             f"Execução longa em {pct:.0f}% do ponto de compactação: hora de /session-handoff + sessão nova + /prime."),
     }
     ctx, aviso = msgs[min(nivel, 3)]
