@@ -147,6 +147,15 @@ def test_clear_lista_indice_de_abertos(tmp_path):
     assert "cerebro → handoffs/history/2026-10-15T020000Z-cerebro.md" in c and "rea-es →" in c
 
 
+def test_clear_usa_indice_txt_se_latest_foi_sobrescrito(tmp_path):
+    a = Ambiente(tmp_path)
+    (a.proj / "handoffs/history/2026-10-15T010000Z-rea-es.md").write_text("a" * 300)
+    (a.proj / "handoffs/latest.md").write_text("# Handoff antigo\n" + "x" * 300)
+    (a.proj / "handoffs/indice.txt").write_text(
+        "- `rea-es` · handoffs/history/2026-10-15T010000Z-rea-es.md · 15/10 01:00\n")
+    assert "rea-es → handoffs/history/2026-10-15T010000Z-rea-es.md" in ctx(a.run("SessionStart", source="clear"))
+
+
 def test_clear_avisa_carimbo_inventado_so_no_futuro(tmp_path):
     a = Ambiente(tmp_path)
     h = a.proj / "handoffs/history"

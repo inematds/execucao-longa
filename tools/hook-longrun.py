@@ -271,13 +271,18 @@ RE_CARIMBO = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{6}Z)")
 
 def indice_abertos(raiz):
     """[(slug, caminho, quando)] do índice do latest.md (handoff-grava.py); [] se não houver índice."""
+    h = pathlib.Path(raiz) / "handoffs"
     try:
-        txt = (pathlib.Path(raiz) / "handoffs" / "latest.md").read_text(encoding="utf-8")
+        txt = (h / "latest.md").read_text(encoding="utf-8")
     except OSError:
-        return []
-    if "<!-- handoff-indice:inicio -->" not in txt:
-        return []
-    bloco = txt.split("<!-- handoff-indice:inicio -->", 1)[1].split("<!-- handoff-indice:fim -->", 1)[0]
+        txt = ""
+    if "<!-- handoff-indice:inicio -->" in txt:
+        bloco = txt.split("<!-- handoff-indice:inicio -->", 1)[1].split("<!-- handoff-indice:fim -->", 1)[0]
+    else:  # latest.md sobrescrito por sessão com a skill antiga: o índice fica no indice.txt
+        try:
+            bloco = (h / "indice.txt").read_text(encoding="utf-8")
+        except OSError:
+            return []
     return [m.groups() for m in (RE_INDICE.match(ln.strip()) for ln in bloco.splitlines()) if m]
 
 
