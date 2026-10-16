@@ -14,11 +14,13 @@ Em QUALQUER sessão (sem longrun ativo):
       grande, BLOQUEIA uma vez o envio e explica: reenviar continua (relendo tudo sem cache) ou /clear limpa.
   SessionStart (clear)          → aponta o último handoff do projeto para o agente ler com /prime se o pedido
       continuar aquele trabalho.
-  Stop (handoff contínuo)       → ao fim de uma resposta, com contexto ≥ 200 mil tokens (piso da compactação por ociosidade) e nenhum handoff gravado
-      por ESTA sessão nos últimos 30 min, devolve "block" uma vez: o agente atualiza o handoff com o cache quente
-      (~20 mil tokens equivalentes contra 250–400 mil de releitura fria depois de parado). No máximo 1 pedido a cada
-      30 min por sessão; nunca quando o próprio Stop já fez o agente continuar (stop_hook_active). Só em projeto com
-      a pasta handoffs/.
+  Stop (handoff por ociosidade, 1.5.x) → ao fim de uma resposta, com contexto ≥ 200 mil tokens (piso da compactação
+      por ociosidade) e a pasta handoffs/, só AGENDA (systemd-run --user, um timer por sessão, refeito a cada resposta)
+      uma conferência para daqui a 30 min. Se a sessão continuar parada (transcrição sem mudança), sem handoff desta
+      sessão nos 30 min anteriores e com o cache de 1 h ainda valendo (< 55 min), o próprio hook grava o handoff numa
+      CÓPIA da sessão (claude -p --resume --fork-session, mesmo modelo → cache quente), que só pode rodar o
+      handoff-grava.py e ler arquivos. Nada interrompe quem está trabalhando: o pedido "Handoff contínuo" da 1.1–1.4
+      (block no Stop a cada 30 min de trabalho) fica desligado por padrão (LONGRUN_CONTINUO_TOKENS=200000 religa).
 
 Com longrun/*/state.md sem "concluído" no projeto, valem as mensagens de execução longa abaixo
 (que também incluem o handoff nas faixas 2 e 3):
@@ -39,12 +41,14 @@ Depois de uma compactação a % cai e as faixas voltam a valer.
 
 Ajustes por ambiente: LONGRUN_FAIXAS="50,70,85"  LONGRUN_TETO=<tokens>  LONGRUN_JANELA=<força a janela>
   LONGRUN_PAUSA_MIN=60  LONGRUN_PAUSA_TOKENS=150000 (0 desliga o bloqueio)  LONGRUN_DEBUG=<arquivo>
-  LONGRUN_CONTINUO_TOKENS=200000 (0 desliga o handoff contínuo)  LONGRUN_CONTINUO_MIN=30
+  LONGRUN_OCIOSO_MIN=30  LONGRUN_OCIOSO_TOKENS=200000 (0 desliga)  LONGRUN_CACHE_MIN=55
+  LONGRUN_CONTINUO_TOKENS=0 (o pedido antigo no Stop; >0 religa)  LONGRUN_CONTINUO_MIN=30
+  Testes: LONGRUN_AGENDAR_ARQ=<arquivo> registra o agendamento sem systemd; LONGRUN_CLAUDE_CMD troca o claude da cópia.
 O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar uma chamada de ferramenta depois.
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.4.1"
+VERSAO = "1.5.1"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -271,8 +275,11 @@ def pausa(d, st):
         return None
     st["pausa_liberada"] = ultima  # reenviar passa
     h, m = divmod(int(parado), 60)
+    auto = st.get("handoff_ocioso") or {}
+    feito = (f" O handoff foi gravado sozinho às {hora(auto['t'])} ({auto.get('arquivo', '')})."
+             if auto.get("t", 0) >= ultima - 5 else "")
     return (f"Sessão parada há {h}h{m:02d}: o cache venceu e esta mensagem vai reprocessar ~{tok // 1000} mil tokens "
-            "do seu limite. Para continuar aqui, reenvie a mensagem. Para começar limpo: /clear e depois /prime "
+            f"do seu limite.{feito} Para continuar aqui, reenvie a mensagem. Para começar limpo: /clear e depois /prime "
             "(o último handoff do projeto é indicado na abertura).")
 
 
@@ -348,7 +355,7 @@ def ao_limpar(d, raiz):
 
 def continuo(d, st, raiz):
     """Stop: pede UMA atualização do handoff com o cache quente; None se não for hora."""
-    minimo = env_int("LONGRUN_CONTINUO_TOKENS", 200_000)
+    minimo = env_int("LONGRUN_CONTINUO_TOKENS", 0)
     if not minimo or d.get("stop_hook_active") or not (pathlib.Path(raiz) / "handoffs").is_dir():
         return None
     intervalo = env_int("LONGRUN_CONTINUO_MIN", 30) * 60
@@ -366,6 +373,129 @@ def continuo(d, st, raiz):
             "(script handoff-grava.py, mesmo --assunto do índice do latest.md): com o cache quente sai barato. "
             "Se você só parou para esperar algo ou terminou a tarefa, termine com uma linha \"Handoff atualizado: <arquivo>\". "
             "Se parou no meio de uma tarefa pedida pelo usuário que ainda dá para continuar, grave e continue nela.")
+
+
+# ---------- handoff por ociosidade ----------
+DIR_LOG = pathlib.Path.home() / ".local/state/execucao-longa"
+GRAVA = pathlib.Path.home() / ".claude/skills/session-handoff/scripts/handoff-grava.py"
+
+
+def log_ocioso(msg):
+    try:
+        DIR_LOG.mkdir(parents=True, exist_ok=True)
+        with open(DIR_LOG / "ocioso.log", "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
+    except OSError:
+        pass
+
+
+def decidir_ocioso(agora, ultimo_stop, mtime_tr, tok, minimo, ja_tem_handoff, cache_min=55, folga=60):
+    """(gravar?, motivo). Pura: o agendamento acorda 30 min depois do último Stop e decide."""
+    if mtime_tr > ultimo_stop + folga:
+        return False, "a sessão andou depois da última resposta"
+    if agora - ultimo_stop > cache_min * 60:
+        return False, "o cache já venceu"
+    if tok < minimo:
+        return False, "contexto pequeno"
+    if ja_tem_handoff:
+        return False, "já há handoff recente desta sessão"
+    return True, "parada, sem handoff recente e com cache quente"
+
+
+def unidade_de(sid):
+    return "longrun-ocioso-" + re.sub(r"[^A-Za-z0-9]", "", sid)[:12]
+
+
+def agendar(unidade, minutos, cmd):
+    arq = os.environ.get("LONGRUN_AGENDAR_ARQ")
+    if arq:  # testes
+        with open(arq, "a") as f:
+            f.write(json.dumps({"unidade": unidade, "minutos": minutos, "cmd": cmd}) + "\n")
+        return
+    subprocess.run(["systemctl", "--user", "stop", f"{unidade}.timer", f"{unidade}.service"],
+                   capture_output=True, timeout=10)
+    env = [f"--setenv={k}={os.environ[k]}" for k in ("PATH", "HOME", "LONGRUN_ESTADO") if os.environ.get(k)]
+    subprocess.run(["systemd-run", "--user", "--quiet", "--collect", f"--unit={unidade}",
+                    f"--on-active={minutos}m", *env, *cmd], capture_output=True, timeout=10)
+
+
+def agendar_ocioso(d, st, raiz):
+    """Stop: agenda a conferência de ociosidade (substitui a anterior desta sessão)."""
+    minimo = env_int("LONGRUN_OCIOSO_TOKENS", 200_000)
+    if os.environ.get("LONGRUN_HEADLESS") or not minimo or not (pathlib.Path(raiz) / "handoffs").is_dir():
+        return
+    t = d.get("transcript_path", "")
+    tok, _ = uso_contexto(t)
+    if tok < minimo:
+        return
+    agora = time.time()
+    st["ultimo_stop"] = agora
+    sid = d.get("session_id", "")
+    agendar(unidade_de(sid), env_int("LONGRUN_OCIOSO_MIN", 30),
+            [sys.executable, str(pathlib.Path(__file__).resolve()), "--ocioso", sid, t, d.get("cwd", ""), str(agora)])
+
+
+def modelo_da_sessao(transcript):
+    linhas, _ = fim_transcricao(transcript)
+    for ln in reversed(linhas):
+        if b'"model"' in ln:
+            try:
+                m = (json.loads(ln).get("message") or {}).get("model")
+            except ValueError:
+                continue
+            if m and not m.startswith("<"):
+                return m
+    return ""
+
+
+PROMPT_OCIOSO = ("A sessão ficou parada {min} min. TAREFA ÚNICA: grave o handoff desta sessão com a skill session-handoff, "
+                 "rodando python3 {grava} --assunto <o mesmo assunto que esta sessão já usou; veja o índice em "
+                 "handoffs/latest.md> com o corpo pelo stdin (heredoc). Não continue nenhuma outra tarefa, não edite outros "
+                 "arquivos, não faça push, não envie mensagens nem chame APIs. No fim responda só: Handoff atualizado: <arquivo>.")
+
+
+def modo_ocioso(sid, transcript, cwd, ultimo_stop):
+    d = {"session_id": sid, "transcript_path": transcript, "cwd": cwd}
+    st, raiz = carregar(d), raiz_de(cwd)
+    minutos = env_int("LONGRUN_OCIOSO_MIN", 30)
+    if st.get("ultimo_stop", 0) > ultimo_stop + 1:
+        return log_ocioso(f"{sid[:8]} agendamento velho, ignorado")
+    try:
+        mtime = os.path.getmtime(transcript)
+    except OSError:
+        return log_ocioso(f"{sid[:8]} transcrição sumiu")
+    tok, _ = uso_contexto(transcript)
+    desde = ultimo_stop - minutos * 60
+    ja = bool(handoff_gravado(transcript, desde, raiz)) or (st.get("handoff_ocioso") or {}).get("t", 0) >= desde
+    ok, motivo = decidir_ocioso(time.time(), ultimo_stop, mtime, tok, env_int("LONGRUN_OCIOSO_TOKENS", 200_000), ja,
+                                env_int("LONGRUN_CACHE_MIN", 55))
+    log_ocioso(f"{sid[:8]} {pathlib.Path(raiz).name} {tok // 1000} mil: {motivo}")
+    if not ok:
+        return
+    antes = ultimo_handoff(raiz)
+    marca = antes.stat().st_mtime if antes else 0
+    cmd = os.environ.get("LONGRUN_CLAUDE_CMD")
+    if cmd:
+        args = cmd.split()
+    else:
+        args = ["claude", "-p", "--resume", sid, "--fork-session", "--permission-mode", "default",
+                "--allowedTools", f"Bash(python3 {GRAVA}:*)", "Bash(git status:*)", "Bash(git log:*)",
+                "Bash(git diff:*)", "Read", "Grep", "Glob"]
+        modelo = modelo_da_sessao(transcript)
+        if modelo:
+            args += ["--model", modelo]
+    try:
+        r = subprocess.run(args, input=PROMPT_OCIOSO.format(min=minutos, grava=GRAVA), capture_output=True, text=True,
+                           cwd=cwd, timeout=20 * 60, env={**os.environ, "LONGRUN_HEADLESS": "1"})
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return log_ocioso(f"{sid[:8]} cópia falhou: {e}")
+    novo = ultimo_handoff(raiz)
+    if not novo or novo.stat().st_mtime <= marca:
+        return log_ocioso(f"{sid[:8]} cópia terminou ({r.returncode}) sem handoff novo: {(r.stdout or r.stderr)[-200:]!r}")
+    st = carregar(d)
+    st["handoff_ocioso"] = {"t": time.time(), "arquivo": str(novo.relative_to(raiz))}
+    salvar(d, st)
+    log_ocioso(f"{sid[:8]} handoff gravado: {novo.relative_to(raiz)}")
 
 
 def emitir(ev, ctx=None, aviso=None):
@@ -421,6 +551,8 @@ def sem_longrun(d, ev, st, raiz):
 
 
 def main():
+    if len(sys.argv) == 6 and sys.argv[1] == "--ocioso":
+        return modo_ocioso(sys.argv[2], sys.argv[3], sys.argv[4], float(sys.argv[5]))
     try:
         d = json.load(sys.stdin)
     except ValueError:
@@ -437,6 +569,7 @@ def main():
     st = carregar(d)
     if ev == "Stop":
         motivo = continuo(d, st, raiz)
+        agendar_ocioso(d, st, raiz)
         salvar(d, st)
         if motivo:
             saida({"decision": "block", "reason": motivo})

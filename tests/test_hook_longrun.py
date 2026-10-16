@@ -30,6 +30,7 @@ class Ambiente:
         self.estado = tmp / "estado"
         self.tr = tmp / "t.jsonl"
         self.tr.write_text("")
+        self.env = {"LONGRUN_AGENDAR_ARQ": str(tmp / "agenda.jsonl")}
 
     def linhas(self, *regs):
         with open(self.tr, "a") as f:
@@ -38,7 +39,7 @@ class Ambiente:
 
     def run(self, ev, **extra):
         d = {"hook_event_name": ev, "cwd": str(self.proj), "session_id": "s1", "transcript_path": str(self.tr), **extra}
-        env = {**os.environ, "LONGRUN_ESTADO": str(self.estado)}
+        env = {**os.environ, "LONGRUN_ESTADO": str(self.estado), **self.env}
         env.pop("LONGRUN_JANELA", None)
         r = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(d), capture_output=True, text=True, env=env, timeout=30)
         assert r.returncode == 0, r.stderr
@@ -188,6 +189,7 @@ def test_estado_antigo_numero_puro(tmp_path):
 
 def test_continuo_pede_uma_vez_e_respeita_intervalo(tmp_path):
     a = Ambiente(tmp_path)
+    a.env["LONGRUN_CONTINUO_TOKENS"] = "200000"  # modo antigo, desligado por padrão desde 1.5.1
     a.linhas(assistente(260_000))
     out = a.run("Stop")
     assert out.get("decision") == "block" and "Handoff contínuo" in out["reason"]
@@ -196,28 +198,33 @@ def test_continuo_pede_uma_vez_e_respeita_intervalo(tmp_path):
 
 def test_continuo_nao_repete_quando_o_stop_ja_fez_continuar(tmp_path):
     a = Ambiente(tmp_path)
+    a.env["LONGRUN_CONTINUO_TOKENS"] = "200000"  # modo antigo, desligado por padrão desde 1.5.1
     a.linhas(assistente(260_000))
     assert a.run("Stop", stop_hook_active=True) == {}
 
 
 def test_continuo_pula_com_handoff_recente_ou_contexto_pequeno(tmp_path):
     a = Ambiente(tmp_path)
+    a.env["LONGRUN_CONTINUO_TOKENS"] = "200000"  # modo antigo, desligado por padrão desde 1.5.1
     rel = "handoffs/history/2026-10-15T060000Z.md"
     (a.proj / rel).write_text("x" * 300)
     a.linhas(assistente(260_000), escrita(rel))
     assert a.run("Stop") == {}
     (tmp_path / "b").mkdir()
     b = Ambiente(tmp_path / "b")
+    b.env["LONGRUN_CONTINUO_TOKENS"] = "200000"
     b.linhas(assistente(100_000))
     assert b.run("Stop") == {}
     (tmp_path / "c").mkdir()
     c = Ambiente(tmp_path / "c", handoffs=False)
+    c.env["LONGRUN_CONTINUO_TOKENS"] = "200000"
     c.linhas(assistente(260_000))
     assert c.run("Stop") == {}
 
 
 def test_continuo_depois_confere_o_handoff(tmp_path):
     a = Ambiente(tmp_path)
+    a.env["LONGRUN_CONTINUO_TOKENS"] = "200000"  # modo antigo, desligado por padrão desde 1.5.1
     a.linhas(assistente(255_000))
     a.run("Stop")
     rel = "handoffs/history/2026-10-15T070000Z.md"
@@ -257,3 +264,91 @@ def test_pos_compactacao_com_handoff_recente_nao_cobra(tmp_path):
     out = a.run("SessionStart", source="compact")
     assert "releia" in ctx(out)
     assert all("AINDA NÃO FOI GRAVADO" not in ctx(a.run("PostToolUse")) for _ in range(12))
+
+
+# ---------- 1.5.1: handoff por ociosidade (agenda no Stop, grava numa cópia da sessão se ficar parada) ----------
+import importlib.util
+
+_spec = importlib.util.spec_from_file_location("hook", HOOK)
+hook = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook)
+
+
+def agenda(tmp_path):
+    arq = tmp_path / "agenda.jsonl"
+    return [json.loads(l) for l in arq.read_text().splitlines()] if arq.exists() else []
+
+
+def test_stop_nao_interrompe_mais_quem_trabalha(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(285_000))
+    assert a.run("Stop") == {}  # sem "block": o pedido no meio do trabalho acabou
+    [ag] = agenda(tmp_path)
+    assert ag["minutos"] == 30 and ag["unidade"].startswith("longrun-ocioso-") and "--ocioso" in ag["cmd"]
+
+
+def test_stop_nao_agenda_com_contexto_pequeno_sem_handoffs_ou_na_copia(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(120_000))
+    a.run("Stop")
+    (tmp_path / "b").mkdir()
+    b = Ambiente(tmp_path / "b", handoffs=False)
+    b.linhas(assistente(285_000))
+    b.run("Stop")
+    (tmp_path / "c").mkdir()
+    c = Ambiente(tmp_path / "c")
+    c.env["LONGRUN_HEADLESS"] = "1"  # a própria cópia não agenda outra
+    c.linhas(assistente(285_000))
+    c.run("Stop")
+    assert agenda(tmp_path) == [] and agenda(tmp_path / "b") == [] and agenda(tmp_path / "c") == []
+
+
+def test_decidir_ocioso():
+    t0 = 1_000_000.0
+    agora = t0 + 30 * 60
+    assert hook.decidir_ocioso(agora, t0, t0 + 10, 300_000, 200_000, False)[0] is True
+    assert "andou" in hook.decidir_ocioso(agora, t0, t0 + 600, 300_000, 200_000, False)[1]
+    assert "venceu" in hook.decidir_ocioso(t0 + 56 * 60, t0, t0, 300_000, 200_000, False)[1]
+    assert "pequeno" in hook.decidir_ocioso(agora, t0, t0, 150_000, 200_000, False)[1]
+    assert "recente" in hook.decidir_ocioso(agora, t0, t0, 300_000, 200_000, True)[1]
+
+
+def _rodar_ocioso(a, tmp_path, ultimo_stop, stub):
+    env = {**os.environ, "LONGRUN_ESTADO": str(a.estado), "LONGRUN_CLAUDE_CMD": f"{sys.executable} {stub}", "HOME": str(tmp_path)}
+    r = subprocess.run([sys.executable, str(HOOK), "--ocioso", "s1", str(a.tr), str(a.proj), str(ultimo_stop)],
+                       capture_output=True, text=True, env=env, timeout=30)
+    assert r.returncode == 0, r.stderr
+
+
+def _stub(tmp_path):
+    stub = tmp_path / "stub.py"
+    stub.write_text("import pathlib,sys,time\nsys.stdin.read()\n"
+                    "p=pathlib.Path('handoffs/history')/time.strftime('%Y-%m-%dT%H%M%SZ-x.md');p.write_text('x'*300)\n"
+                    "print('Handoff atualizado:',p)\n")
+    return stub
+
+
+def test_ocioso_grava_na_copia_e_registra(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(285_000, quando=time.time() - 31 * 60))
+    parado = time.time() - 31 * 60
+    os.utime(a.tr, (parado, parado))
+    a.run("Stop")  # registra ultimo_stop agora; o teste usa o valor gravado
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    os.utime(a.tr, (st["ultimo_stop"] - 5, st["ultimo_stop"] - 5))
+    _rodar_ocioso(a, tmp_path, st["ultimo_stop"], _stub(tmp_path))
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    assert st["handoff_ocioso"]["arquivo"].startswith("handoffs/history/")
+
+
+def test_ocioso_nao_grava_se_a_sessao_andou_ou_agendamento_velho(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(285_000))
+    a.run("Stop")
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    stub = _stub(tmp_path)
+    os.utime(a.tr, (st["ultimo_stop"] + 600, st["ultimo_stop"] + 600))  # mexeu depois do Stop
+    _rodar_ocioso(a, tmp_path, st["ultimo_stop"], stub)
+    os.utime(a.tr, (st["ultimo_stop"], st["ultimo_stop"]))
+    _rodar_ocioso(a, tmp_path, st["ultimo_stop"] - 100, stub)  # um Stop mais novo já reagendou
+    assert list((a.proj / "handoffs" / "history").iterdir()) == []

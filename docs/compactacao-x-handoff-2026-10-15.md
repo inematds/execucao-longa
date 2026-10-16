@@ -41,3 +41,7 @@ Leituras nos primeiros 25 passos: depois de compactar 51–59%; sessão nova com
 | Depois de compactar | gravar handoff a partir do resumo | reler o handoff recente da sessão junto com o resumo; só gravar se não houver nos últimos 30 min | evita cópia de cópia e devolve as decisões que o resumo dilui |
 | Faixa 3, 3ª compactação | parar e pedir sessão nova | continuar a tarefa; sessão nova só ao fim | sessão nova custa mais leitura |
 | Cache vencido (60 min, ≥ 150 mil) | mantido | mantido | só pega a faixa 150–200 mil, que não compacta por ociosidade |
+
+## 5. 1.5.1 (16/10/2026): handoff por ociosidade real
+
+O Nei viu o pedido "Handoff contínuo" aparecer com 203 e 285 mil tokens enquanto trabalhava: o gatilho era "30 min sem handoff", não "30 min parado". Gravar com a sessão ativa só protege de queda abrupta; o ganho do cache quente só existe depois que a sessão para. Hook não roda parado, então o `Stop` agora **agenda** (systemd-run, 30 min) e a conferência grava o handoff numa cópia da sessão (`--fork-session`, mesmo modelo, ferramentas limitadas ao `handoff-grava.py` e leitura) se a transcrição não mudou, não há handoff recente e o cache ainda vale (< 55 min, antes da compactação por ociosidade). O pedido no `Stop` ficou desligado por padrão.
