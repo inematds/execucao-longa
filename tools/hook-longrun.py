@@ -57,7 +57,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.8.2"
+VERSAO = "1.8.3"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -339,8 +339,8 @@ def pausa(d, st):
         st["ocioso_avisado"] = auto["t"]  # o bloqueio já cita o handoff: a linha de aviso_ocioso não repete
     feito = f" O handoff foi gravado sozinho às {hora(auto['t'])} ({auto.get('arquivo', '')})." if recente else ""
     meu = (auto.get("arquivo") if recente else None) or meu_handoff(t, raiz_de(d.get("cwd", "")))
-    prime = (f"/clear e depois /prime {meu} (o handoff desta sessão; outra sessão pode ter gravado um mais novo)."
-             if meu else "/clear e depois /prime (o último handoff do projeto é indicado na abertura).")
+    prime = (f"(handoff desta sessão; outra sessão pode ter gravado um mais novo)\n/clear\n/prime {meu}"
+             if meu else "(o último handoff do projeto é indicado na abertura)\n/clear\n/prime")
     return (f"Sessão parada há {h}h{m:02d}: o cache venceu e esta mensagem vai reprocessar ~{tok // 1000} mil tokens "
             f"do seu limite.{feito} Para continuar aqui, reenvie a mensagem. Para começar limpo: {prime}")
 
@@ -629,7 +629,7 @@ def aviso_ocioso(d, st, raiz):
     if not (pathlib.Path(raiz) / rel).is_file():
         return None
     return (f"Handoff gravado sozinho às {hora(t)} enquanto a sessão estava parada. Para seguir aqui, nada a fazer; "
-            f"para recomeçar limpo: /clear e depois /prime {rel}")
+            f"para recomeçar limpo:\n/clear\n/prime {rel}")
 
 
 def juntar(*partes):

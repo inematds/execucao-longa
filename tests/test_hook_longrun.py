@@ -450,7 +450,7 @@ def test_pausa_aponta_o_handoff_desta_sessao_e_nao_o_mais_novo(tmp_path):
              assistente(200_000, quando=time.time() - 2 * 3600))
     out = a.run("UserPromptSubmit", prompt="oi")
     assert out.get("decision") == "block"
-    assert f"/prime handoffs/history/{meu}" in out["reason"] and outro not in out["reason"]
+    assert f"\n/clear\n/prime handoffs/history/{meu}" in out["reason"] and outro not in out["reason"]
 
 
 def test_pausa_sem_handoff_da_sessao_mantem_prime_simples(tmp_path):
@@ -492,7 +492,7 @@ def test_volta_antes_de_1h_mostra_linha_do_handoff_automatico_uma_vez(tmp_path):
     out = a.run("UserPromptSubmit", prompt="oi")
     assert out.get("decision") is None  # não bloqueia
     msg = out.get("systemMessage", "")
-    assert "Handoff gravado sozinho" in msg and f"/prime {rel}" in msg and "/clear" in msg
+    assert "Handoff gravado sozinho" in msg and f"\n/clear\n/prime {rel}" in msg
     assert "Handoff gravado sozinho" not in a.run("UserPromptSubmit", prompt="oi").get("systemMessage", "")
 
 
