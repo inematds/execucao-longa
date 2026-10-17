@@ -55,7 +55,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.7.1"
+VERSAO = "1.7.2"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -252,9 +252,17 @@ def snapshot_com_perguntas(raiz, olhar=20):
 
 
 def pedido_medir(d, raiz, modo, tok=0):
-    """Texto que pede as 5 respostas de memória ANTES de abrir o handoff, e o registro da nota."""
-    rel = snapshot_com_perguntas(raiz)
-    if not rel:
+    """Texto que pede as 5 respostas de memória ANTES de abrir o handoff, e o registro da nota.
+    Só contra o handoff gravado por ESTA sessão (1.7.2): o mais novo do projeto pode ser de outra sessão, e medir
+    a memória desta contra ele dá nota falsa."""
+    if os.environ.get("LONGRUN_MEDIR", "1") == "0":
+        return ""
+    rel = meu_handoff(d.get("transcript_path", ""), raiz)
+    try:
+        txt = (pathlib.Path(raiz) / rel).read_text(encoding="utf-8", errors="ignore") if rel else ""
+    except OSError:
+        txt = ""
+    if not any(s in txt for s in SECOES):
         return ""
     perg = " ".join(f"{i}) {q}" for i, q in enumerate(PERGUNTAS, 1))
     cmd = (f"python3 {NOTA} --modo {modo} --acertos <N> --total 5 --snapshot {rel} --raiz {raiz} "

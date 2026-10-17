@@ -2,6 +2,7 @@
 
 | data | o que quebrou | menor correção | prompt \| infra |
 |---|---|---|---|
+| 2026-10-17 | medição de retomada pedia nota desta sessão contra o handoff mais novo do projeto (vps-inventario, de outra sessão) | `pedido_medir` usa só o snapshot gravado por esta sessão (saída do handoff-grava.py na transcrição); sem ele, não mede (1.7.2) | infra |
 | 2026-10-16 | "Handoff contínuo" (Stop) bloqueou a resposta e cobrou handoff com 203 e 285 mil tokens enquanto o Nei trabalhava: o gatilho era "30 min sem handoff", não "30 min parado" | Stop só agenda (systemd-run 30 min); a conferência grava numa cópia `--fork-session` se a sessão continuar parada e o cache valer; pedido antigo desligado (1.5.1) | prompt |
 | 2026-10-15 | guia EN/ES mostrava o infográfico (ex1) e a capa (ex2) em PT; só os banners tinham versão por idioma | `ex1-en/es` e `ex2-en/es` pelo Codex image_gen editando a original + conferência de cada texto (ES saiu com "progresso", "soluciónes", "producccción") | prompt |
 | 2026-10-15 | `hook-longrun` calculava a % sobre 1 milhão, mas o Claude Code compacta o Opus 5.5 entre 200 e 575 mil: as faixas de 70/85% dispararam 2 vezes em 8 dias; e o pedido de handoff pós-compactação virou arquivo em só 17 de 84 casos | % sobre o teto `LONGRUN_TETO`=225 mil + conferência do arquivo na transcrição com até 2 cobranças | infra + prompt |

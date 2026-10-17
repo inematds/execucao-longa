@@ -360,9 +360,13 @@ NOTA = ROOT / "tools" / "nota-retomada.py"
 SNAP_PT = "# Handoff\n\n## Perguntas-teste\n1. Qual é a tarefa atual? → x — fonte: `a.md`\n" + "linha\n" * 40
 
 
-def com_perguntas(a, nome="2026-10-17T010000Z-x.md"):
+def com_perguntas(a, nome="2026-10-17T010000Z-x.md", desta_sessao=True):
     (a.proj / "handoffs/history" / nome).write_text(SNAP_PT)
-    return f"handoffs/history/{nome}"
+    rel = f"handoffs/history/{nome}"
+    if desta_sessao:  # a transcrição mostra a saída do handoff-grava.py desta sessão
+        a.linhas({"type": "user", "timestamp": iso(time.time() - 3 * 3600), "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "g", "content": f"snapshot: {rel}"}]}})
+    return rel
 
 
 def test_compactacao_pede_respostas_de_memoria_antes_do_handoff(tmp_path):
@@ -454,3 +458,20 @@ def test_pausa_sem_handoff_da_sessao_mantem_prime_simples(tmp_path):
     a.linhas(assistente(200_000, quando=time.time() - 2 * 3600))
     out = a.run("UserPromptSubmit", prompt="oi")
     assert "/prime handoffs/history/" not in out["reason"]
+
+
+def test_nao_mede_contra_handoff_de_outra_sessao(tmp_path):
+    a = Ambiente(tmp_path)
+    com_perguntas(a, desta_sessao=False)  # gravado por outra sessão no mesmo projeto
+    assert "MEDIÇÃO" not in ctx(a.run("SessionStart", source="compact"))
+    a.linhas(assistente(200_000, quando=time.time() - 2 * 3600))
+    assert a.run("UserPromptSubmit", prompt="oi").get("decision") == "block"
+    assert "MEDIÇÃO" not in ctx(a.run("UserPromptSubmit", prompt="oi"))
+
+
+def test_mede_contra_o_handoff_desta_sessao_mesmo_com_outro_mais_novo(tmp_path):
+    a = Ambiente(tmp_path)
+    meu = com_perguntas(a, "2026-10-17T010000Z-meu.md")
+    com_perguntas(a, "2026-10-17T020000Z-outro.md", desta_sessao=False)
+    texto = ctx(a.run("SessionStart", source="compact"))
+    assert meu in texto and "outro" not in texto
