@@ -475,3 +475,31 @@ def test_mede_contra_o_handoff_desta_sessao_mesmo_com_outro_mais_novo(tmp_path):
     com_perguntas(a, "2026-10-17T020000Z-outro.md", desta_sessao=False)
     texto = ctx(a.run("SessionStart", source="compact"))
     assert meu in texto and "outro" not in texto
+
+
+def _com_ocioso(a, quando):
+    rel = "handoffs/history/2026-10-17T200000Z-auto.md"
+    (a.proj / rel).write_text("x" * 300)
+    a.estado.mkdir(exist_ok=True)
+    (a.estado / "s1").write_text(json.dumps({"handoff_ocioso": {"t": quando, "arquivo": rel}}))
+    return rel
+
+
+def test_volta_antes_de_1h_mostra_linha_do_handoff_automatico_uma_vez(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(250_000, quando=time.time() - 40 * 60))
+    rel = _com_ocioso(a, time.time() - 5 * 60)
+    out = a.run("UserPromptSubmit", prompt="oi")
+    assert out.get("decision") is None  # não bloqueia
+    msg = out.get("systemMessage", "")
+    assert "Handoff gravado sozinho" in msg and f"/prime {rel}" in msg and "/clear" in msg
+    assert "Handoff gravado sozinho" not in a.run("UserPromptSubmit", prompt="oi").get("systemMessage", "")
+
+
+def test_pausa_longa_cita_o_automatico_e_nao_repete_a_linha(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(250_000, quando=time.time() - 2 * 3600))
+    rel = _com_ocioso(a, time.time() - 80 * 60)
+    out = a.run("UserPromptSubmit", prompt="oi")
+    assert out.get("decision") == "block" and rel in out["reason"]
+    assert "Handoff gravado sozinho" not in a.run("UserPromptSubmit", prompt="oi").get("systemMessage", "")

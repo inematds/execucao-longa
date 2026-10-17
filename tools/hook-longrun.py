@@ -14,6 +14,8 @@ Em QUALQUER sessão (sem longrun ativo):
       grande, BLOQUEIA uma vez o envio e explica: reenviar continua (relendo tudo sem cache) ou /clear limpa.
       Desde a 1.7.1 o aviso traz /prime com o snapshot gravado por ESTA sessão (saída do handoff-grava.py na
       transcrição), não o mais novo do projeto, que pode ser de outra sessão.
+      1.8.2: depois de um handoff por ociosidade, quem volta ANTES de 1 h (sem bloqueio) vê uma linha visível com
+      a hora e /clear + /prime <arquivo>, uma vez por handoff.
   SessionStart (clear)          → aponta o último handoff do projeto para o agente ler com /prime se o pedido
       continuar aquele trabalho.
   Stop (handoff por ociosidade, 1.5.x) → ao fim de uma resposta, com contexto ≥ 200 mil tokens (piso da compactação
@@ -55,7 +57,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.7.2"
+VERSAO = "1.8.2"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -333,6 +335,8 @@ def pausa(d, st):
     h, m = divmod(int(parado), 60)
     auto = st.get("handoff_ocioso") or {}
     recente = auto.get("t", 0) >= ultima - 5
+    if recente:
+        st["ocioso_avisado"] = auto["t"]  # o bloqueio já cita o handoff: a linha de aviso_ocioso não repete
     feito = f" O handoff foi gravado sozinho às {hora(auto['t'])} ({auto.get('arquivo', '')})." if recente else ""
     meu = (auto.get("arquivo") if recente else None) or meu_handoff(t, raiz_de(d.get("cwd", "")))
     prime = (f"/clear e depois /prime {meu} (o handoff desta sessão; outra sessão pode ter gravado um mais novo)."
@@ -612,6 +616,22 @@ def medir_pausa(d, st, raiz):
     return pedido_medir(d, raiz, "continuada", uso_contexto(d.get("transcript_path", ""))[0])
 
 
+def aviso_ocioso(d, st, raiz):
+    """Linha visível (sem bloquear) na 1ª mensagem depois de um handoff gravado sozinho por ociosidade, para quem
+    volta antes de 1 h (o bloqueio da pausa não aparece): diz quando foi e deixa /clear + /prime <arquivo> pronto."""
+    if d.get("hook_event_name") != "UserPromptSubmit":
+        return None
+    auto = st.get("handoff_ocioso") or {}
+    t, rel = auto.get("t", 0), auto.get("arquivo", "")
+    if not t or not rel or t <= st.get("ocioso_avisado", 0):
+        return None
+    st["ocioso_avisado"] = t
+    if not (pathlib.Path(raiz) / rel).is_file():
+        return None
+    return (f"Handoff gravado sozinho às {hora(t)} enquanto a sessão estava parada. Para seguir aqui, nada a fazer; "
+            f"para recomeçar limpo: /clear e depois /prime {rel}")
+
+
 def juntar(*partes):
     return " ".join(p.strip() for p in partes if p and p.strip()) or None
 
@@ -635,6 +655,8 @@ def sem_longrun(d, ev, st, raiz):
     medir = medir_pausa(d, st, raiz)
     ctx_c, aviso_c = conferir_handoff(d, st, raiz)
     ctx_c = juntar(medir, ctx_c)
+    aviso_o = aviso_ocioso(d, st, raiz)
+    aviso_c = juntar(aviso_o, aviso_c)
     nivel, pct, tok, janela = subiu_faixa(d, st)
     if nivel >= 2:
         pedir_handoff(st, raiz)
@@ -645,7 +667,7 @@ def sem_longrun(d, ev, st, raiz):
             ctx = (f"{medida} " + HANDOFF.replace(" Depois avise em uma linha que gravou e continue o trabalho.", "") + SEGUIR)
         ctx = juntar(medir, ctx)
         salvar(d, st)
-        emitir(ev, ctx, f"Contexto em {pct:.0f}% do ponto de compactação: o agente vai gravar o handoff.")
+        emitir(ev, ctx, juntar(aviso_o, f"Contexto em {pct:.0f}% do ponto de compactação: o agente vai gravar o handoff."))
     salvar(d, st)
     emitir(ev, ctx_c, aviso_c)
 
@@ -706,6 +728,8 @@ def main():
     medir = medir_pausa(d, st, raiz)
     ctx_c, aviso_c = conferir_handoff(d, st, raiz)
     ctx_c = juntar(medir, ctx_c)
+    aviso_o = aviso_ocioso(d, st, raiz)
+    aviso_c = juntar(aviso_o, aviso_c)
     nivel, pct, tok, janela = subiu_faixa(d, st)
     if not nivel:
         salvar(d, st)
@@ -729,7 +753,7 @@ def main():
             f"Execução longa em {pct:.0f}% do ponto de compactação: hora de /session-handoff + sessão nova + /prime."),
     }
     ctx, aviso = msgs[min(nivel, 3)]
-    emitir(ev, juntar(medir, ctx), aviso)
+    emitir(ev, juntar(medir, ctx), juntar(aviso_o, aviso))
 
 
 if __name__ == "__main__":
