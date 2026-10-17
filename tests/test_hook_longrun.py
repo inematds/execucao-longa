@@ -352,3 +352,79 @@ def test_ocioso_nao_grava_se_a_sessao_andou_ou_agendamento_velho(tmp_path):
     os.utime(a.tr, (st["ultimo_stop"], st["ultimo_stop"]))
     _rodar_ocioso(a, tmp_path, st["ultimo_stop"] - 100, stub)  # um Stop mais novo já reagendou
     assert list((a.proj / "handoffs" / "history").iterdir()) == []
+
+
+# --- 1.6.1: medição de retomada (perguntas-teste de memória × /prime) ---
+
+NOTA = ROOT / "tools" / "nota-retomada.py"
+SNAP_PT = "# Handoff\n\n## Perguntas-teste\n1. Qual é a tarefa atual? → x — fonte: `a.md`\n" + "linha\n" * 40
+
+
+def com_perguntas(a, nome="2026-10-17T010000Z-x.md"):
+    (a.proj / "handoffs/history" / nome).write_text(SNAP_PT)
+    return f"handoffs/history/{nome}"
+
+
+def test_compactacao_pede_respostas_de_memoria_antes_do_handoff(tmp_path):
+    a = Ambiente(tmp_path)
+    rel = com_perguntas(a)
+    texto = ctx(a.run("SessionStart", source="compact"))
+    assert "MEDIÇÃO DE RETOMADA (modo compactada)" in texto
+    assert "de memória" in texto and "O que está pela metade?" in texto
+    assert rel in texto and "nota-retomada.py" in texto and "--modo compactada" in texto
+    assert texto.index("MEDIÇÃO") < texto.index("releia")  # mede antes de reler
+
+
+def test_sem_secao_perguntas_nao_mede(tmp_path):
+    a = Ambiente(tmp_path)
+    (a.proj / "handoffs/history/2026-10-17T010000Z-x.md").write_text("# Handoff antigo\n" + "l\n" * 40)
+    assert "MEDIÇÃO" not in ctx(a.run("SessionStart", source="compact"))
+
+
+def test_resume_mede_como_retomada(tmp_path):
+    a = Ambiente(tmp_path)
+    com_perguntas(a)
+    a.linhas(assistente(300_000))
+    assert "(modo retomada)" in ctx(a.run("SessionStart", source="resume"))
+
+
+def test_volta_da_pausa_mede_uma_vez_como_continuada(tmp_path):
+    a = Ambiente(tmp_path)
+    com_perguntas(a)
+    a.linhas(assistente(200_000, quando=time.time() - 2 * 3600))
+    assert a.run("UserPromptSubmit", prompt="oi").get("decision") == "block"
+    texto = ctx(a.run("UserPromptSubmit", prompt="oi"))
+    assert "(modo continuada)" in texto and "--tokens 200000" in texto
+    assert "MEDIÇÃO" not in ctx(a.run("UserPromptSubmit", prompt="oi"))
+
+
+def test_clear_pede_nota_do_prime(tmp_path):
+    a = Ambiente(tmp_path)
+    com_perguntas(a)
+    texto = ctx(a.run("SessionStart", source="clear"))
+    assert "--modo prime" in texto and "nota-retomada.py" in texto
+
+
+def test_medir_desligado(tmp_path):
+    a = Ambiente(tmp_path)
+    com_perguntas(a)
+    a.env["LONGRUN_MEDIR"] = "0"
+    assert "MEDIÇÃO" not in ctx(a.run("SessionStart", source="compact"))
+    assert "--modo prime" not in ctx(a.run("SessionStart", source="clear"))
+
+
+def test_nota_retomada_registra_e_relata(tmp_path):
+    env = {**os.environ, "LONGRUN_NOTAS": str(tmp_path / "notas.jsonl")}
+    def nota(*args):
+        r = subprocess.run([sys.executable, str(NOTA), *args], capture_output=True, text=True, env=env)
+        assert r.returncode == 0, r.stderr
+        return r.stdout
+    nota("--modo", "compactada", "--acertos", "3", "--snapshot", "handoffs/history/x.md", "--raiz", "/p", "--tokens", "250000")
+    nota("--modo", "compactada", "--acertos", "5", "--snapshot", "handoffs/history/x.md", "--raiz", "/p")
+    nota("--modo", "prime", "--acertos", "4", "--snapshot", "handoffs/history/x.md", "--raiz", "/p")
+    linhas = (tmp_path / "notas.jsonl").read_text().splitlines()
+    assert len(linhas) == 3 and json.loads(linhas[0])["acertos"] == 3
+    rel = nota("--relatorio")
+    assert "compactada" in rel and "80%" in rel and "prime" in rel
+    r = subprocess.run([sys.executable, str(NOTA), "--modo", "x", "--acertos", "9"], capture_output=True, text=True, env=env)
+    assert r.returncode != 0

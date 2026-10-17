@@ -21,6 +21,11 @@ Em QUALQUER sessão (sem longrun ativo):
       CÓPIA da sessão (claude -p --resume --fork-session, mesmo modelo → cache quente), que só pode rodar o
       handoff-grava.py e ler arquivos. Nada interrompe quem está trabalhando: o pedido "Handoff contínuo" da 1.1–1.4
       (block no Stop a cada 30 min de trabalho) fica desligado por padrão (LONGRUN_CONTINUO_TOKENS=200000 religa).
+  Medição de retomada (1.6.x) → se o snapshot mais novo do projeto tem a seção "Perguntas-teste" (kit
+      agente-claude-codex 1.5.2+), depois de compactar (modo compactada), de `--resume` (retomada) e no reenvio
+      depois da pausa com cache vencido (continuada), o agente responde as 5 perguntas DE MEMÓRIA antes de abrir o
+      handoff, compara e registra a nota com tools/nota-retomada.py; na sessão limpa, pede a nota do /prime (prime).
+      `nota-retomada.py --relatorio` compara os modos. LONGRUN_MEDIR=0 desliga.
 
 Com longrun/*/state.md sem "concluído" no projeto, valem as mensagens de execução longa abaixo
 (que também incluem o handoff nas faixas 2 e 3):
@@ -48,7 +53,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.5.1"
+VERSAO = "1.6.1"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -218,6 +223,47 @@ HANDOFF_POS_COMPACT = ("O resumo da compactação guarda bem arquivos e passos r
                        "session-handoff e avise em uma linha. Depois continue a tarefa em curso.")
 
 
+PERGUNTAS = ("Qual é a tarefa atual e o critério de pronto?", "Qual foi a última decisão e por quê?",
+             "O que não pode mudar (restrição do usuário ou trava)?", "O que está pela metade?",
+             "Qual é a próxima ação e ela precisa de aprovação?")
+NOTA = pathlib.Path(__file__).resolve().parent / "nota-retomada.py"
+SECOES = ("## Perguntas-teste", "## Test questions")
+
+
+def snapshot_com_perguntas(raiz, olhar=20):
+    """Caminho relativo do snapshot mais novo (mtime) que tem a seção Perguntas-teste; None se não houver."""
+    if os.environ.get("LONGRUN_MEDIR", "1") == "0":
+        return None
+    hist = pathlib.Path(raiz) / "handoffs" / "history"
+    try:
+        arqs = sorted(hist.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:olhar]
+    except OSError:
+        return None
+    for p in arqs:
+        try:
+            txt = p.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if any(s in txt for s in SECOES):
+            return str(p.relative_to(raiz))
+    return None
+
+
+def pedido_medir(d, raiz, modo, tok=0):
+    """Texto que pede as 5 respostas de memória ANTES de abrir o handoff, e o registro da nota."""
+    rel = snapshot_com_perguntas(raiz)
+    if not rel:
+        return ""
+    perg = " ".join(f"{i}) {q}" for i, q in enumerate(PERGUNTAS, 1))
+    cmd = (f"python3 {NOTA} --modo {modo} --acertos <N> --total 5 --snapshot {rel} --raiz {raiz} "
+           f"--sessao {d.get('session_id', '')}" + (f" --tokens {tok}" if tok else ""))
+    return (f"MEDIÇÃO DE RETOMADA (modo {modo}): ANTES de abrir qualquer arquivo ou reler o handoff, responda de memória, "
+            f"uma linha cada, só com o que está no seu contexto agora, e mostre as 5 respostas: {perg} "
+            f"Depois abra {rel} (seção Perguntas-teste e as fontes que ela aponta), marque cada uma como certa ou errada "
+            "(vaga ou 'não sei' = errada) e registre: " + cmd + " . Avise em uma linha 'Nota da retomada: N/5' "
+            "(e o que errou) e só então siga. ")
+
+
 def subiu_faixa(d, st):
     """(nível novo, %, tokens, janela) quando o contexto entra numa faixa acima da última avisada; nível 0 se não."""
     tok, janela = uso_contexto(d.get("transcript_path", ""))
@@ -350,6 +396,11 @@ def ao_limpar(d, raiz):
                  f"{time.strftime('%d/%m %H:%M', time.localtime(p.stat().st_mtime))}; outras sessões podem gravar "
                  "no mesmo projeto). Se o primeiro pedido do usuário continuar aquele trabalho, leia-o com a skill "
                  "prime antes de agir; não retome publicação, envio ou deploy por conta própria." + aviso)
+    rel = snapshot_com_perguntas(raiz)
+    if rel:
+        texto += (f" Se rodar o prime sobre um handoff com Perguntas-teste (o mais novo é {rel}), registre a nota do passo "
+                  f"6c: python3 {NOTA} --modo prime --acertos <N> --total 5 --snapshot <snapshot lido> --raiz {raiz} "
+                  f"--sessao {d.get('session_id', '')}")
     saida({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": texto}})
 
 
@@ -521,13 +572,28 @@ def pos_compact(d, st, raiz, extra_base):
     return extra_base, None
 
 
+def medir_pausa(d, st, raiz):
+    """No reenvio que passa pelo bloqueio da pausa: pede a medição (modo continuada) uma vez por pausa."""
+    lib = st.get("pausa_liberada")
+    if d.get("hook_event_name") != "UserPromptSubmit" or not lib or st.get("pausa_medida") == lib:
+        return ""
+    st["pausa_medida"] = lib
+    return pedido_medir(d, raiz, "continuada", uso_contexto(d.get("transcript_path", ""))[0])
+
+
+def juntar(*partes):
+    return " ".join(p.strip() for p in partes if p and p.strip()) or None
+
+
 def sem_longrun(d, ev, st, raiz):
     """Sessão comum: handoff nas faixas 2 e 3 e depois de compactar, com conferência."""
     if ev == "SessionStart":
         if d.get("source") == "compact":
             ctx, aviso = pos_compact(d, st, raiz, HANDOFF_POS_COMPACT)
             salvar(d, st)
-            emitir(ev, ctx, aviso)
+            emitir(ev, juntar(pedido_medir(d, raiz, "compactada"), ctx), aviso)
+        elif d.get("source") == "resume":
+            emitir(ev, juntar(pedido_medir(d, raiz, "retomada", uso_contexto(d.get("transcript_path", ""))[0])))
         return
     if ev not in ("PostToolUse", "UserPromptSubmit"):
         return
@@ -535,7 +601,9 @@ def sem_longrun(d, ev, st, raiz):
     if bloqueio:
         salvar(d, st)
         saida({"decision": "block", "reason": bloqueio})
+    medir = medir_pausa(d, st, raiz)
     ctx_c, aviso_c = conferir_handoff(d, st, raiz)
+    ctx_c = juntar(medir, ctx_c)
     nivel, pct, tok, janela = subiu_faixa(d, st)
     if nivel >= 2:
         pedir_handoff(st, raiz)
@@ -544,6 +612,7 @@ def sem_longrun(d, ev, st, raiz):
             ctx = f"{medida} Terminada a ação em curso, " + HANDOFF
         else:
             ctx = (f"{medida} " + HANDOFF.replace(" Depois avise em uma linha que gravou e continue o trabalho.", "") + SEGUIR)
+        ctx = juntar(medir, ctx)
         salvar(d, st)
         emitir(ev, ctx, f"Contexto em {pct:.0f}% do ponto de compactação: o agente vai gravar o handoff.")
     salvar(d, st)
@@ -588,7 +657,10 @@ def main():
         if d.get("source") == "compact":
             extra, aviso = pos_compact(d, st, raiz, " " + HANDOFF_POS_COMPACT)
             salvar(d, st)
-        emitir(ev, f"EXECUÇÃO LONGA ATIVA neste projeto ({lista}). O contexto foi compactado ou a sessão foi retomada: "
+            medir = pedido_medir(d, raiz, "compactada")
+        else:
+            medir = pedido_medir(d, raiz, "retomada", uso_contexto(d.get("transcript_path", ""))[0])
+        emitir(ev, medir + f"EXECUÇÃO LONGA ATIVA neste projeto ({lista}). O contexto foi compactado ou a sessão foi retomada: "
                "antes de qualquer ação, releia goal.md → state.md → plan.md → canal.md e as últimas linhas de "
                "progress.md e failures.md dessa pasta, e continue do primeiro item pendente sem reabrir o que já está feito."
                + extra, aviso)
@@ -600,7 +672,9 @@ def main():
     if bloqueio:
         salvar(d, st)
         saida({"decision": "block", "reason": bloqueio})
+    medir = medir_pausa(d, st, raiz)
     ctx_c, aviso_c = conferir_handoff(d, st, raiz)
+    ctx_c = juntar(medir, ctx_c)
     nivel, pct, tok, janela = subiu_faixa(d, st)
     if not nivel:
         salvar(d, st)
@@ -624,7 +698,7 @@ def main():
             f"Execução longa em {pct:.0f}% do ponto de compactação: hora de /session-handoff + sessão nova + /prime."),
     }
     ctx, aviso = msgs[min(nivel, 3)]
-    emitir(ev, ctx, aviso)
+    emitir(ev, juntar(medir, ctx), aviso)
 
 
 if __name__ == "__main__":
