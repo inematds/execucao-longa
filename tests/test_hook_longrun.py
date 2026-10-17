@@ -428,3 +428,29 @@ def test_nota_retomada_registra_e_relata(tmp_path):
     assert "compactada" in rel and "80%" in rel and "prime" in rel
     r = subprocess.run([sys.executable, str(NOTA), "--modo", "x", "--acertos", "9"], capture_output=True, text=True, env=env)
     assert r.returncode != 0
+
+
+def resultado_grava(rel, quando=None):
+    return {"type": "user", "timestamp": iso(quando or time.time()),
+            "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "x", "content": f"snapshot: {rel}\nlatest.md: 2 assunto(s)"}]}}
+
+
+def test_pausa_aponta_o_handoff_desta_sessao_e_nao_o_mais_novo(tmp_path):
+    a = Ambiente(tmp_path)
+    hist = a.proj / "handoffs" / "history"
+    meu, outro = "2026-10-17T100000Z-robot.md", "2026-10-17T110000Z-outro.md"
+    (hist / meu).write_text("x" * 300)
+    (hist / outro).write_text("x" * 300)  # gravado depois por outra sessão
+    a.linhas(resultado_grava(f"handoffs/history/{meu}", quando=time.time() - 2 * 3600 - 60),
+             assistente(200_000, quando=time.time() - 2 * 3600))
+    out = a.run("UserPromptSubmit", prompt="oi")
+    assert out.get("decision") == "block"
+    assert f"/prime handoffs/history/{meu}" in out["reason"] and outro not in out["reason"]
+
+
+def test_pausa_sem_handoff_da_sessao_mantem_prime_simples(tmp_path):
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(200_000, quando=time.time() - 2 * 3600))
+    out = a.run("UserPromptSubmit", prompt="oi")
+    assert "/prime handoffs/history/" not in out["reason"]

@@ -12,6 +12,8 @@ Em QUALQUER sessão (sem longrun ativo):
       "handoff conferido". Só vale em projeto com a pasta handoffs/.
   UserPromptSubmit após pausa   → se a última resposta foi há mais de 60 min (o cache venceu) e o contexto é
       grande, BLOQUEIA uma vez o envio e explica: reenviar continua (relendo tudo sem cache) ou /clear limpa.
+      Desde a 1.7.1 o aviso traz /prime com o snapshot gravado por ESTA sessão (saída do handoff-grava.py na
+      transcrição), não o mais novo do projeto, que pode ser de outra sessão.
   SessionStart (clear)          → aponta o último handoff do projeto para o agente ler com /prime se o pedido
       continuar aquele trabalho.
   Stop (handoff por ociosidade, 1.5.x) → ao fim de uma resposta, com contexto ≥ 200 mil tokens (piso da compactação
@@ -53,7 +55,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.6.1"
+VERSAO = "1.7.1"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -322,11 +324,32 @@ def pausa(d, st):
     st["pausa_liberada"] = ultima  # reenviar passa
     h, m = divmod(int(parado), 60)
     auto = st.get("handoff_ocioso") or {}
-    feito = (f" O handoff foi gravado sozinho às {hora(auto['t'])} ({auto.get('arquivo', '')})."
-             if auto.get("t", 0) >= ultima - 5 else "")
+    recente = auto.get("t", 0) >= ultima - 5
+    feito = f" O handoff foi gravado sozinho às {hora(auto['t'])} ({auto.get('arquivo', '')})." if recente else ""
+    meu = (auto.get("arquivo") if recente else None) or meu_handoff(t, raiz_de(d.get("cwd", "")))
+    prime = (f"/clear e depois /prime {meu} (o handoff desta sessão; outra sessão pode ter gravado um mais novo)."
+             if meu else "/clear e depois /prime (o último handoff do projeto é indicado na abertura).")
     return (f"Sessão parada há {h}h{m:02d}: o cache venceu e esta mensagem vai reprocessar ~{tok // 1000} mil tokens "
-            f"do seu limite.{feito} Para continuar aqui, reenvie a mensagem. Para começar limpo: /clear e depois /prime "
-            "(o último handoff do projeto é indicado na abertura).")
+            f"do seu limite.{feito} Para continuar aqui, reenvie a mensagem. Para começar limpo: {prime}")
+
+
+RE_SNAP = re.compile(rb"snapshot: (handoffs/history/[A-Za-z0-9_.:+-]+\.md)")
+
+
+def meu_handoff(transcript, raiz):
+    """Último snapshot gravado por ESTA sessão (linha 'snapshot: …' do handoff-grava.py na transcrição) que ainda
+    existe no disco; None se não houver. Não usa o mais novo do projeto: outra sessão pode ter gravado depois."""
+    if not raiz:
+        return None
+    linhas, _ = fim_transcricao(transcript, 8 << 20)
+    for ln in reversed(linhas):
+        if b"snapshot: handoffs/history/" not in ln or b'"tool_result"' not in ln:
+            continue
+        for m in reversed(RE_SNAP.findall(ln)):
+            rel = m.decode()
+            if (pathlib.Path(raiz) / rel).is_file():
+                return rel
+    return None
 
 
 def ultimo_handoff(raiz):
