@@ -369,6 +369,37 @@ def test_ocioso_grava_mesmo_com_linhas_sem_carimbo_depois_do_stop(tmp_path):
     assert st["handoff_ocioso"]["arquivo"].startswith("handoffs/history/")
 
 
+def test_ocioso_grava_mesmo_com_away_summary_e_exit_depois_do_stop(tmp_path):
+    """1.8.6: o Claude Code grava system/away_summary (COM carimbo) 3–12 min depois da resposta quando o Nei troca
+    de foco; e /exit grava linhas de comando local. Nada disso é trabalho: 7 sessões de 16/10 perderam o handoff."""
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(400_000, quando=time.time() - 31 * 60))
+    a.run("Stop")
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    a.linhas({"type": "system", "subtype": "away_summary", "timestamp": iso(st["ultimo_stop"] + 180)},
+             {"type": "user", "timestamp": iso(st["ultimo_stop"] + 1200),
+              "message": {"role": "user", "content": "<command-name>/exit</command-name>"}},
+             {"type": "user", "timestamp": iso(st["ultimo_stop"] + 1200),
+              "message": {"role": "user", "content": "<local-command-stdout>See ya!</local-command-stdout>"}})
+    _rodar_ocioso(a, tmp_path, st["ultimo_stop"], _stub(tmp_path))
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    assert st["handoff_ocioso"]["arquivo"].startswith("handoffs/history/")
+
+
+def test_ocioso_regrava_se_o_handoff_e_anterior_ao_ultimo_trabalho(tmp_path):
+    """1.8.6: handoff automático às 07:38, trabalho até 08:06, conferência às 08:36 dizia 'já há handoff recente'
+    (janela de 30 min antes do Stop) e a meia hora final se perdeu. Agora só cobre até 5 min antes do Stop."""
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(480_000, quando=time.time() - 31 * 60))
+    a.run("Stop")
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    st["handoff_ocioso"] = {"t": st["ultimo_stop"] - 20 * 60, "arquivo": "handoffs/history/velho.md"}
+    next(a.estado.iterdir()).write_text(json.dumps(st))
+    _rodar_ocioso(a, tmp_path, st["ultimo_stop"], _stub(tmp_path))
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    assert st["handoff_ocioso"]["arquivo"] != "handoffs/history/velho.md"
+
+
 # --- 1.6.1: medição de retomada (perguntas-teste de memória × /prime) ---
 
 NOTA = ROOT / "tools" / "nota-retomada.py"

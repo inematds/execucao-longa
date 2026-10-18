@@ -22,7 +22,7 @@ Em QUALQUER sessão (sem longrun ativo):
   Stop (handoff por ociosidade, 1.5.x) → ao fim de uma resposta, com contexto ≥ 200 mil tokens (piso da compactação
       por ociosidade) e a pasta handoffs/, só AGENDA (systemd-run --user, um timer por sessão, refeito a cada resposta)
       uma conferência para daqui a 30 min. Se a sessão continuar parada (transcrição sem mudança), sem handoff desta
-      sessão nos 30 min anteriores e com o cache de 1 h ainda valendo (< 55 min), o próprio hook grava o handoff numa
+      sessão gravado até 5 min antes da última resposta (1.8.6; antes eram 30 min e o fim do trabalho ficava de fora) e com o cache de 1 h ainda valendo (< 55 min), o próprio hook grava o handoff numa
       CÓPIA da sessão (claude -p --resume --fork-session, mesmo modelo → cache quente), que só pode rodar o
       handoff-grava.py e ler arquivos. Nada interrompe quem está trabalhando: o pedido "Handoff contínuo" da 1.1–1.4
       (block no Stop a cada 30 min de trabalho) fica desligado por padrão (LONGRUN_CONTINUO_TOKENS=200000 religa).
@@ -58,7 +58,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.8.5"
+VERSAO = "1.8.6"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -164,18 +164,28 @@ def ts_iso(s):
         return 0.0
 
 
+COMANDO_LOCAL = ("<local-command-caveat>", "<local-command-stdout>", "<command-name>")
+
+
 def ultima_atividade(transcript):
-    """Hora (epoch) da última linha COM carimbo de tempo na transcrição; 0.0 se não houver.
+    """Hora (epoch) da última linha de TRABALHO (user/assistant) na transcrição; 0.0 se não houver.
     Não usa a data do arquivo: o Claude Code acrescenta linhas sem carimbo (api-request-blob, cost-state)
-    depois da resposta, e isso fazia a sessão parada parecer ativa (1.8.5)."""
+    depois da resposta (1.8.5). Também ignora linhas COM carimbo que não são trabalho: system/away_summary
+    (gravado 3–12 min depois da resposta quando o usuário troca de foco) e comandos locais como /exit (1.8.6)."""
     linhas, _ = fim_transcricao(transcript)
     for ln in reversed(linhas):
         if b'"timestamp"' not in ln:
             continue
         try:
-            t = ts_iso(json.loads(ln).get("timestamp", ""))
-        except (ValueError, AttributeError):
+            reg = json.loads(ln)
+        except ValueError:
             continue
+        if reg.get("type") not in ("user", "assistant"):
+            continue
+        conteudo = (reg.get("message") or {}).get("content")
+        if isinstance(conteudo, str) and any(m in conteudo for m in COMANDO_LOCAL):
+            continue
+        t = ts_iso(reg.get("timestamp", ""))
         if t:
             return t
     return 0.0
@@ -357,9 +367,15 @@ def pausa(d, st):
         st["ocioso_avisado"] = auto["t"]  # o bloqueio já cita o handoff: a linha de aviso_ocioso não repete
     feito = f" O handoff foi gravado sozinho às {hora(auto['t'])} ({auto.get('arquivo', '')})." if recente else ""
     meu = (auto.get("arquivo") if recente else None) or meu_handoff(t, raiz_de(d.get("cwd", "")))
-    prime = (f"(handoff desta sessão; outra sessão pode ter gravado um mais novo)\n/clear\n/prime {meu}"
-             if meu else "NENHUM handoff desta sessão foi gravado: antes do /clear, peça para gravar "
-             "(skill session-handoff), senão o /prime não terá o caminho deste trabalho.")
+    velho = auto.get("arquivo") if auto.get("t") and not recente else None
+    if meu:
+        prime = f"(handoff desta sessão; outra sessão pode ter gravado um mais novo)\n/clear\n/prime {meu}"
+    elif velho:
+        prime = (f"o handoff automático das {hora(auto['t'])} ({velho}) é ANTERIOR ao último trabalho: antes do /clear, "
+                 "peça para atualizar (skill session-handoff), senão o fim do trabalho se perde.")
+    else:
+        prime = ("NENHUM handoff desta sessão foi gravado: antes do /clear, peça para gravar "
+                 "(skill session-handoff), senão o /prime não terá o caminho deste trabalho.")
     return (f"Sessão parada há {h}h{m:02d}: o cache venceu e esta mensagem vai reprocessar ~{tok // 1000} mil tokens "
             f"do seu limite.{feito} Para continuar aqui, reenvie a mensagem. Para começar limpo: {prime}")
 
@@ -494,6 +510,9 @@ def log_ocioso(msg):
         pass
 
 
+COBERTURA_MIN = 5  # handoff gravado até 5 min antes da última resposta conta como "recente"
+
+
 def decidir_ocioso(agora, ultimo_stop, atividade, tok, minimo, ja_tem_handoff, cache_min=55, folga=60):
     """(gravar?, motivo). Pura: o agendamento acorda 30 min depois do último Stop e decide."""
     if atividade > ultimo_stop + folga:
@@ -569,8 +588,10 @@ def modo_ocioso(sid, transcript, cwd, ultimo_stop):
         return log_ocioso(f"{sid[:8]} transcrição sumiu")
     atividade = ultima_atividade(transcript) or os.path.getmtime(transcript)
     tok, _ = uso_contexto(transcript)
-    desde = ultimo_stop - minutos * 60
-    ja = bool(handoff_gravado(transcript, desde, raiz)) or (st.get("handoff_ocioso") or {}).get("t", 0) >= desde
+    # Só cobre o handoff gravado no FIM do trabalho (até 5 min antes da última resposta). Antes era
+    # "30 min antes da última resposta": um handoff das 07:38 cobria um Stop das 08:06 e a meia hora final se perdia (1.8.6).
+    desde = ultimo_stop - COBERTURA_MIN * 60
+    ja =bool(handoff_gravado(transcript, desde, raiz)) or (st.get("handoff_ocioso") or {}).get("t", 0) >= desde
     ok, motivo = decidir_ocioso(time.time(), ultimo_stop, atividade, tok, env_int("LONGRUN_OCIOSO_TOKENS", 200_000), ja,
                                 env_int("LONGRUN_CACHE_MIN", 55))
     log_ocioso(f"{sid[:8]} {pathlib.Path(raiz).name} {tok // 1000} mil: {motivo}")
