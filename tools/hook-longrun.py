@@ -14,6 +14,7 @@ Em QUALQUER sessão (sem longrun ativo):
       grande, BLOQUEIA uma vez o envio e explica: reenviar continua (relendo tudo sem cache) ou /clear limpa.
       Desde a 1.7.1 o aviso traz /prime com o snapshot gravado por ESTA sessão (saída do handoff-grava.py na
       transcrição), não o mais novo do projeto, que pode ser de outra sessão.
+      1.8.5: sem handoff desta sessão, o aviso diz que NÃO há handoff e pede para gravar antes do /clear.
       1.8.2: depois de um handoff por ociosidade, quem volta ANTES de 1 h (sem bloqueio) vê uma linha visível com
       a hora e /clear + /prime <arquivo>, uma vez por handoff.
   SessionStart (clear)          → aponta o último handoff do projeto para o agente ler com /prime se o pedido
@@ -57,7 +58,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.8.4"
+VERSAO = "1.8.5"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -161,6 +162,23 @@ def ts_iso(s):
         return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
     except (AttributeError, ValueError):
         return 0.0
+
+
+def ultima_atividade(transcript):
+    """Hora (epoch) da última linha COM carimbo de tempo na transcrição; 0.0 se não houver.
+    Não usa a data do arquivo: o Claude Code acrescenta linhas sem carimbo (api-request-blob, cost-state)
+    depois da resposta, e isso fazia a sessão parada parecer ativa (1.8.5)."""
+    linhas, _ = fim_transcricao(transcript)
+    for ln in reversed(linhas):
+        if b'"timestamp"' not in ln:
+            continue
+        try:
+            t = ts_iso(json.loads(ln).get("timestamp", ""))
+        except (ValueError, AttributeError):
+            continue
+        if t:
+            return t
+    return 0.0
 
 
 def ultima_resposta(transcript):
@@ -340,7 +358,8 @@ def pausa(d, st):
     feito = f" O handoff foi gravado sozinho às {hora(auto['t'])} ({auto.get('arquivo', '')})." if recente else ""
     meu = (auto.get("arquivo") if recente else None) or meu_handoff(t, raiz_de(d.get("cwd", "")))
     prime = (f"(handoff desta sessão; outra sessão pode ter gravado um mais novo)\n/clear\n/prime {meu}"
-             if meu else "(o último handoff do projeto é indicado na abertura)\n/clear\n/prime")
+             if meu else "NENHUM handoff desta sessão foi gravado: antes do /clear, peça para gravar "
+             "(skill session-handoff), senão o /prime não terá o caminho deste trabalho.")
     return (f"Sessão parada há {h}h{m:02d}: o cache venceu e esta mensagem vai reprocessar ~{tok // 1000} mil tokens "
             f"do seu limite.{feito} Para continuar aqui, reenvie a mensagem. Para começar limpo: {prime}")
 
@@ -475,9 +494,9 @@ def log_ocioso(msg):
         pass
 
 
-def decidir_ocioso(agora, ultimo_stop, mtime_tr, tok, minimo, ja_tem_handoff, cache_min=55, folga=60):
+def decidir_ocioso(agora, ultimo_stop, atividade, tok, minimo, ja_tem_handoff, cache_min=55, folga=60):
     """(gravar?, motivo). Pura: o agendamento acorda 30 min depois do último Stop e decide."""
-    if mtime_tr > ultimo_stop + folga:
+    if atividade > ultimo_stop + folga:
         return False, "a sessão andou depois da última resposta"
     if agora - ultimo_stop > cache_min * 60:
         return False, "o cache já venceu"
@@ -546,14 +565,13 @@ def modo_ocioso(sid, transcript, cwd, ultimo_stop):
     minutos = env_int("LONGRUN_OCIOSO_MIN", 30)
     if st.get("ultimo_stop", 0) > ultimo_stop + 1:
         return log_ocioso(f"{sid[:8]} agendamento velho, ignorado")
-    try:
-        mtime = os.path.getmtime(transcript)
-    except OSError:
+    if not os.path.exists(transcript):
         return log_ocioso(f"{sid[:8]} transcrição sumiu")
+    atividade = ultima_atividade(transcript) or os.path.getmtime(transcript)
     tok, _ = uso_contexto(transcript)
     desde = ultimo_stop - minutos * 60
     ja = bool(handoff_gravado(transcript, desde, raiz)) or (st.get("handoff_ocioso") or {}).get("t", 0) >= desde
-    ok, motivo = decidir_ocioso(time.time(), ultimo_stop, mtime, tok, env_int("LONGRUN_OCIOSO_TOKENS", 200_000), ja,
+    ok, motivo = decidir_ocioso(time.time(), ultimo_stop, atividade, tok, env_int("LONGRUN_OCIOSO_TOKENS", 200_000), ja,
                                 env_int("LONGRUN_CACHE_MIN", 55))
     log_ocioso(f"{sid[:8]} {pathlib.Path(raiz).name} {tok // 1000} mil: {motivo}")
     if not ok:

@@ -347,11 +347,26 @@ def test_ocioso_nao_grava_se_a_sessao_andou_ou_agendamento_velho(tmp_path):
     a.run("Stop")
     st = json.loads(next(a.estado.iterdir()).read_text())
     stub = _stub(tmp_path)
-    os.utime(a.tr, (st["ultimo_stop"] + 600, st["ultimo_stop"] + 600))  # mexeu depois do Stop
+    a.linhas({"type": "user", "timestamp": iso(st["ultimo_stop"] + 600),
+              "message": {"role": "user", "content": "continua"}})  # o Nei mandou mensagem depois do Stop
     _rodar_ocioso(a, tmp_path, st["ultimo_stop"], stub)
     os.utime(a.tr, (st["ultimo_stop"], st["ultimo_stop"]))
     _rodar_ocioso(a, tmp_path, st["ultimo_stop"] - 100, stub)  # um Stop mais novo já reagendou
     assert list((a.proj / "handoffs" / "history").iterdir()) == []
+
+
+def test_ocioso_grava_mesmo_com_linhas_sem_carimbo_depois_do_stop(tmp_path):
+    """18/10/2026: o Claude Code acrescenta api-request-blob/cost-state sem timestamp depois da resposta; a data do
+    arquivo mudava e o hook concluía 'a sessão andou' — o curso do-chat-ao-agente-v71 ficou sem handoff."""
+    a = Ambiente(tmp_path)
+    a.linhas(assistente(600_000, quando=time.time() - 31 * 60))
+    a.run("Stop")
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    a.linhas({"type": "api-request-blob"}, {"type": "cost-state"})
+    os.utime(a.tr, (st["ultimo_stop"] + 900, st["ultimo_stop"] + 900))
+    _rodar_ocioso(a, tmp_path, st["ultimo_stop"], _stub(tmp_path))
+    st = json.loads(next(a.estado.iterdir()).read_text())
+    assert st["handoff_ocioso"]["arquivo"].startswith("handoffs/history/")
 
 
 # --- 1.6.1: medição de retomada (perguntas-teste de memória × /prime) ---
@@ -458,6 +473,7 @@ def test_pausa_sem_handoff_da_sessao_mantem_prime_simples(tmp_path):
     a.linhas(assistente(200_000, quando=time.time() - 2 * 3600))
     out = a.run("UserPromptSubmit", prompt="oi")
     assert "/prime handoffs/history/" not in out["reason"]
+    assert "NENHUM handoff desta sessão" in out["reason"]
 
 
 def test_nao_mede_contra_handoff_de_outra_sessao(tmp_path):

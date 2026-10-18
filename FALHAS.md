@@ -2,6 +2,7 @@
 
 | data | o que quebrou | menor correção | prompt \| infra |
 |---|---|---|---|
+| 2026-10-18 | handoff por ociosidade não gravou o curso do-chat-ao-agente-v71 (600 mil, parada 1 h): o hook viu a data da transcrição mudar (linhas sem carimbo que o Claude Code acrescenta depois da resposta) e concluiu "a sessão andou"; o bloqueio de cache saiu com /prime sem caminho | decidir pela última linha COM carimbo (`ultima_atividade`), não pelo mtime; bloqueio sem handoff diz "NENHUM handoff desta sessão foi gravado" (1.8.5) | infra |
 | 2026-10-17 | medição de retomada pedia nota desta sessão contra o handoff mais novo do projeto (vps-inventario, de outra sessão) | `pedido_medir` usa só o snapshot gravado por esta sessão (saída do handoff-grava.py na transcrição); sem ele, não mede (1.7.2) | infra |
 | 2026-10-16 | "Handoff contínuo" (Stop) bloqueou a resposta e cobrou handoff com 203 e 285 mil tokens enquanto o Nei trabalhava: o gatilho era "30 min sem handoff", não "30 min parado" | Stop só agenda (systemd-run 30 min); a conferência grava numa cópia `--fork-session` se a sessão continuar parada e o cache valer; pedido antigo desligado (1.5.1) | prompt |
 | 2026-10-15 | guia EN/ES mostrava o infográfico (ex1) e a capa (ex2) em PT; só os banners tinham versão por idioma | `ex1-en/es` e `ex2-en/es` pelo Codex image_gen editando a original + conferência de cada texto (ES saiu com "progresso", "soluciónes", "producccción") | prompt |
