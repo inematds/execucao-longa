@@ -284,7 +284,7 @@ def test_stop_nao_interrompe_mais_quem_trabalha(tmp_path):
     a.linhas(assistente(285_000))
     assert a.run("Stop") == {}  # sem "block": o pedido no meio do trabalho acabou
     [ag] = agenda(tmp_path)
-    assert ag["minutos"] == 30 and ag["unidade"].startswith("longrun-ocioso-") and "--ocioso" in ag["cmd"]
+    assert ag["minutos"] == 45 and ag["unidade"].startswith("longrun-ocioso-") and "--ocioso" in ag["cmd"]
 
 
 def test_stop_nao_agenda_com_contexto_pequeno_sem_handoffs_ou_na_copia(tmp_path):

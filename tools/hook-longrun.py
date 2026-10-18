@@ -21,7 +21,7 @@ Em QUALQUER sessão (sem longrun ativo):
       continuar aquele trabalho.
   Stop (handoff por ociosidade, 1.5.x) → ao fim de uma resposta, com contexto ≥ 200 mil tokens (piso da compactação
       por ociosidade) e a pasta handoffs/, só AGENDA (systemd-run --user, um timer por sessão, refeito a cada resposta)
-      uma conferência para daqui a 30 min. Se a sessão continuar parada (transcrição sem mudança), sem handoff desta
+      uma conferência para daqui a 45 min (1.9.6; era 30). Se a sessão continuar parada (transcrição sem mudança), sem handoff desta
       sessão gravado até 5 min antes da última resposta (1.8.6; antes eram 30 min e o fim do trabalho ficava de fora) e com o cache de 1 h ainda valendo (< 55 min), o próprio hook grava o handoff numa
       CÓPIA da sessão (claude -p --resume --fork-session, mesmo modelo → cache quente), que só pode rodar o
       handoff-grava.py e ler arquivos. Nada interrompe quem está trabalhando: o pedido "Handoff contínuo" da 1.1–1.4
@@ -51,14 +51,14 @@ Depois de uma compactação a % cai e as faixas voltam a valer.
 
 Ajustes por ambiente: LONGRUN_FAIXAS="50,70,85"  LONGRUN_TETO=<tokens>  LONGRUN_JANELA=<força a janela>
   LONGRUN_PAUSA_MIN=60  LONGRUN_PAUSA_TOKENS=150000 (0 desliga o bloqueio)  LONGRUN_DEBUG=<arquivo>
-  LONGRUN_OCIOSO_MIN=30  LONGRUN_OCIOSO_TOKENS=200000 (0 desliga)  LONGRUN_CACHE_MIN=55
+  LONGRUN_OCIOSO_MIN=45  LONGRUN_OCIOSO_TOKENS=200000 (0 desliga)  LONGRUN_CACHE_MIN=55
   LONGRUN_CONTINUO_TOKENS=0 (o pedido antigo no Stop; >0 religa)  LONGRUN_CONTINUO_MIN=30
   Testes: LONGRUN_AGENDAR_ARQ=<arquivo> registra o agendamento sem systemd; LONGRUN_CLAUDE_CMD troca o claude da cópia.
 O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar uma chamada de ferramenta depois.
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.8.6"
+VERSAO = "1.9.6"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -514,7 +514,7 @@ COBERTURA_MIN = 5  # handoff gravado até 5 min antes da última resposta conta 
 
 
 def decidir_ocioso(agora, ultimo_stop, atividade, tok, minimo, ja_tem_handoff, cache_min=55, folga=60):
-    """(gravar?, motivo). Pura: o agendamento acorda 30 min depois do último Stop e decide."""
+    """(gravar?, motivo). Pura: o agendamento acorda 45 min depois do último Stop e decide."""
     if atividade > ultimo_stop + folga:
         return False, "a sessão andou depois da última resposta"
     if agora - ultimo_stop > cache_min * 60:
@@ -555,7 +555,7 @@ def agendar_ocioso(d, st, raiz):
     agora = time.time()
     st["ultimo_stop"] = agora
     sid = d.get("session_id", "")
-    agendar(unidade_de(sid), env_int("LONGRUN_OCIOSO_MIN", 30),
+    agendar(unidade_de(sid), env_int("LONGRUN_OCIOSO_MIN", 45),
             [sys.executable, str(pathlib.Path(__file__).resolve()), "--ocioso", sid, t, d.get("cwd", ""), str(agora)])
 
 
@@ -581,7 +581,7 @@ PROMPT_OCIOSO = ("A sessão ficou parada {min} min. TAREFA ÚNICA: grave o hando
 def modo_ocioso(sid, transcript, cwd, ultimo_stop):
     d = {"session_id": sid, "transcript_path": transcript, "cwd": cwd}
     st, raiz = carregar(d), raiz_de(cwd)
-    minutos = env_int("LONGRUN_OCIOSO_MIN", 30)
+    minutos = env_int("LONGRUN_OCIOSO_MIN", 45)
     if st.get("ultimo_stop", 0) > ultimo_stop + 1:
         return log_ocioso(f"{sid[:8]} agendamento velho, ignorado")
     if not os.path.exists(transcript):
