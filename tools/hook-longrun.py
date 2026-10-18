@@ -57,7 +57,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.8.3"
+VERSAO = "1.8.4"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -229,7 +229,7 @@ HANDOFF_POS_COMPACT = ("O resumo da compactação guarda bem arquivos e passos r
 
 PERGUNTAS = ("Qual é a tarefa atual e o critério de pronto?", "Qual foi a última decisão e por quê?",
              "O que não pode mudar (restrição do usuário ou trava)?", "O que está pela metade?",
-             "Qual é a próxima ação e ela precisa de aprovação?")
+             "Qual é a próxima ação, por quê, e ela precisa de aprovação?")
 NOTA = pathlib.Path(__file__).resolve().parent / "nota-retomada.py"
 SECOES = ("## Perguntas-teste", "## Test questions")
 
