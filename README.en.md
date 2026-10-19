@@ -73,6 +73,46 @@ Each session counts separately: two idle sessions show the warning once each. Tu
 | `LONGRUN_PAUSA_MIN` | `60` | idle minutes before holding (e.g. `120`) |
 | `LONGRUN_PAUSA_TOKENS` | `150000` | minimum context to hold; `0` turns it off |
 
+## Cache, automatic handoff and compaction: how it works
+
+**What returning to an idle session costs.** Every message resends the whole conversation. With a warm cache (up to ~1 h since the last reply), that re-read costs ~10% of the normal input price. After 1 h the cache expires: the next message reprocesses everything and writes the cache again (~2× the normal price, about 20× a warm-cache message). In a session at 48% of the context, that is ~480K tokens re-read at once. On a subscription this is not money, but it comes out of your usage quota (5-hour and weekly limits). You pay it once: the following messages are cheap again.
+
+**That is why the handoff has a right time.** Written with a warm cache, a handoff costs one cheap message. Requested after the cache expired, it pays the full re-read itself. `/compact` costs the same, since it also reads everything. If the work is already in files (commits, pending list, CLAUDE.md), you can `/clear` + `/prime` without a handoff, and it is cheap because prime reads only what it needs. Paying the re-read is only worth it when there are decisions that live only in the conversation.
+
+**Automatic handoff on idle.** The agent only runs when a message arrives, and hooks fire on events, not on a clock: without help, nothing writes the handoff while you are doing something else. `tools/hook-longrun.py` handles this on the `Stop` event:
+
+1. At the end of each reply, with context ≥ 200K tokens (~20% of the 1M window) and a `handoffs/` folder in the project, it schedules a timer (`systemd-run --user`, one per session, reset on every reply) for 45 min later.
+2. When the timer fires, the hook checks three things: the session is still idle, there is no handoff from this session written up to 5 min before the last reply, and the cache is still valid (< 55 min).
+3. If all three hold, it writes the handoff in a **copy** of the session (`claude -p --resume --fork-session`, same model, on the subscription). The copy reads from the warm cache and may only run `handoff-grava.py` and read files. The open session is not touched.
+4. Every check is logged in `~/.local/state/execucao-longa/ocioso.log` (written, or why not).
+
+**Timeline of an idle session:**
+
+| Idle time | What happens |
+|---|---|
+| 0 | the reply ends and the 45-min timer is scheduled |
+| 3–12 min | if you switched focus, Claude Code writes an "away summary" (`away_summary`) into the conversation; it does **not** count as activity |
+| 45 min | handoff written in the copy, with a warm cache |
+| ~54 min | Claude Code compacts on its own for idleness (only above ~200K tokens), still with a warm cache |
+| 60 min | the cache expires |
+| when you return | if it compacted: the conversation continues from the summary, cheaply, and the hook asks to re-read the handoff with it. If it did not compact and more than 60 min passed: the hook holds the first message once (previous section) and shows `/clear` + `/prime <this session's handoff>` |
+
+**Why 45 min and not 50.** Idle compaction comes between 53 and 58 min, and the copy takes 30–60 s plus Claude's startup. At 50 min it could land after the summary or past the 55-min cache limit. The cost is the same at any time before 1 h (one warm-cache read); 45 leaves margin.
+
+**Automatic compaction does not replace the handoff.** The summary loses detail (decisions, files, what not to do), and it does not always happen. On 2026-10-18 an idle session at 480K tokens was not compacted, and returning paid the full re-read. The 45-min handoff is the safeguard; compaction is a bonus when it comes.
+
+**What made the automatic handoff fail** (fixed in 1.8.5 and 1.8.6):
+
+- **File date.** Claude Code appends untimestamped lines after the reply, and the hook read that as "the session moved". It now decides by the last timestamped line.
+- **Switching focus and `/exit`.** `away_summary` and local commands are timestamped and also looked like activity: 7 sessions on 10/16 got no handoff. Now only user messages and agent replies count.
+- **An old handoff counting as recent.** A 07:38 handoff covered an 08:06 reply, and the last half hour was lost. Now only a handoff written up to 5 min before the last reply counts. If the cache expires with an automatic handoff older than the last work, the warning says so instead of "no handoff".
+
+| Variable | Default | Effect |
+|---|---|---|
+| `LONGRUN_OCIOSO_MIN` | `45` | idle minutes before writing (do not go past ~45) |
+| `LONGRUN_OCIOSO_TOKENS` | `200000` | minimum context to write; `0` turns it off |
+| `LONGRUN_CACHE_MIN` | `55` | after this the copy does not run (the cache would be cold) |
+
 ## Use when / don't use when
 
 | ✅ Use | ❌ Don't (or split into smaller sessions) |

@@ -73,6 +73,46 @@ Cada sessão é contada à parte: duas sessões paradas mostram o aviso uma vez 
 | `LONGRUN_PAUSA_MIN` | `60` | minutos parado antes de segurar (ex.: `120`) |
 | `LONGRUN_PAUSA_TOKENS` | `150000` | contexto mínimo para segurar; `0` desliga a trava |
 
+## Cache, handoff automático e compactação: como funciona
+
+**Quanto custa voltar a uma sessão parada.** A cada mensagem, o Claude Code reenvia a conversa inteira. Com o cache quente (até ~1 h desde a última resposta), essa releitura sai por ~10% do preço normal de entrada. Depois de 1 h o cache vence: a próxima mensagem reprocessa tudo e grava o cache de novo (~2× o preço normal, cerca de 20× uma mensagem com cache quente). Numa sessão em 48% do contexto, são ~480 mil tokens relidos de uma vez. Na assinatura isso não vira dinheiro, mas sai da cota de uso (limite de 5 h e semanal). Paga-se uma vez só: as mensagens seguintes voltam a ser baratas.
+
+**Por isso o handoff tem hora certa.** Gravado com o cache quente, o handoff custa uma mensagem barata. Pedido depois que o cache venceu, ele próprio paga a releitura cheia. O `/compact` custa o mesmo, porque também lê tudo. Se o trabalho já está em arquivos (commits, pendências, CLAUDE.md), dá para fazer `/clear` + `/prime` sem handoff, e sai barato, porque o prime lê só o necessário. Só vale pagar a releitura quando há decisões que ficaram apenas na conversa.
+
+**Handoff automático por ociosidade.** O agente só roda quando chega uma mensagem, e os hooks disparam por evento, não por relógio: sem ajuda, nada grava o handoff enquanto você está em outra coisa. O `tools/hook-longrun.py` resolve isso no evento `Stop`:
+
+1. Ao fim de cada resposta, com contexto ≥ 200 mil tokens (~20% da janela de 1M) e a pasta `handoffs/` no projeto, agenda um timer (`systemd-run --user`, um por sessão, refeito a cada resposta) para daqui a 45 min.
+2. Quando o timer dispara, o hook confere três coisas: a sessão continua parada, não há handoff desta sessão gravado até 5 min antes da última resposta, e o cache ainda vale (< 55 min).
+3. Se as três baterem, grava o handoff numa **cópia** da sessão (`claude -p --resume --fork-session`, mesmo modelo, pela assinatura). A cópia lê com o cache quente e só pode rodar o `handoff-grava.py` e ler arquivos. A sessão aberta não é tocada.
+4. Cada conferência fica registrada em `~/.local/state/execucao-longa/ocioso.log` (gravou, ou por que não gravou).
+
+**Linha do tempo de uma sessão parada:**
+
+| Tempo parado | O que acontece |
+|---|---|
+| 0 | a resposta termina e o timer de 45 min é agendado |
+| 3–12 min | se você trocou de foco, o Claude Code grava um "resumo de ausência" (`away_summary`) na conversa; isso **não** conta como atividade |
+| 45 min | handoff gravado na cópia, com o cache quente |
+| ~54 min | o Claude Code compacta sozinho por ociosidade (só acima de ~200 mil tokens), ainda com o cache quente |
+| 60 min | o cache vence |
+| ao voltar | se compactou: a conversa segue do resumo, barata, e o hook pede para reler o handoff junto. Se não compactou e passou de 60 min: o hook segura a primeira mensagem uma vez (seção anterior) e mostra `/clear` + `/prime <handoff desta sessão>` |
+
+**Por que 45 min e não 50.** A compactação por ociosidade vem entre 53 e 58 min, e a cópia leva 30–60 s mais a partida do Claude. Aos 50 min ela pode chegar depois do resumo ou passar do limite de 55 min do cache. O custo é o mesmo a qualquer hora antes de 1 h (uma leitura com o cache quente); 45 deixa folga.
+
+**A compactação automática não substitui o handoff.** O resumo perde detalhe (decisões, arquivos, o que não fazer), e ela nem sempre acontece. Em 18/10/2026, uma sessão parada com 480 mil tokens não foi compactada, e a volta pagou a releitura cheia. O handoff aos 45 min é a proteção; a compactação é bônus quando vem.
+
+**O que já fez o handoff automático falhar** (corrigido na 1.8.5 e na 1.8.6):
+
+- **Data do arquivo.** O Claude Code acrescenta linhas sem carimbo depois da resposta, e o hook lia isso como "a sessão andou". Agora ele decide pela última linha com carimbo.
+- **Troca de foco e `/exit`.** O `away_summary` e os comandos locais têm carimbo e também pareciam atividade: 7 sessões de 16/10 ficaram sem handoff. Agora só contam mensagens do usuário e respostas do agente.
+- **Handoff velho contando como recente.** Um handoff das 07:38 cobria uma resposta das 08:06, e a meia hora final se perdia. Agora só vale o handoff gravado até 5 min antes da última resposta. Se o cache vencer com um handoff automático anterior ao último trabalho, o aviso diz isso, em vez de "nenhum handoff".
+
+| Variável | Padrão | Efeito |
+|---|---|---|
+| `LONGRUN_OCIOSO_MIN` | `45` | minutos parado antes de gravar (não passe de ~45) |
+| `LONGRUN_OCIOSO_TOKENS` | `200000` | contexto mínimo para gravar; `0` desliga |
+| `LONGRUN_CACHE_MIN` | `55` | depois disso a cópia não roda (o cache já estaria frio) |
+
 ## Use quando / não use quando
 
 | ✅ Use | ❌ Não use (ou quebre em sessões menores) |
