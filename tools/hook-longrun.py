@@ -29,7 +29,7 @@ Em QUALQUER sessão (sem longrun ativo):
   Medição de retomada (1.6.x) → se o snapshot mais novo do projeto tem a seção "Perguntas-teste" (kit
       agente-claude-codex 1.5.2+), depois de compactar (modo compactada), de `--resume` (retomada) e no reenvio
       depois da pausa com cache vencido (continuada), o agente responde as 5 perguntas DE MEMÓRIA antes de abrir o
-      handoff, compara e registra a nota com tools/nota-retomada.py; na sessão limpa, pede a nota do /prime (prime).
+      handoff, e manda as respostas para tools/nota-retomada.py, que dá a nota pelas chaves (1.10.6); na sessão limpa, pede a nota do /prime (prime).
       `nota-retomada.py --relatorio` compara os modos. LONGRUN_MEDIR=0 desliga.
 
 Com longrun/*/state.md sem "concluído" no projeto, valem as mensagens de execução longa abaixo
@@ -58,7 +58,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.9.6"
+VERSAO = "1.10.6"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -295,13 +295,13 @@ def pedido_medir(d, raiz, modo, tok=0):
     if not any(s in txt for s in SECOES):
         return ""
     perg = " ".join(f"{i}) {q}" for i, q in enumerate(PERGUNTAS, 1))
-    cmd = (f"python3 {NOTA} --modo {modo} --acertos <N> --total 5 --snapshot {rel} --raiz {raiz} "
-           f"--sessao {d.get('session_id', '')}" + (f" --tokens {tok}" if tok else ""))
+    cmd = (f"python3 {NOTA} --modo {modo} --respostas - --snapshot {rel} --raiz {raiz} "
+           f"--sessao {d.get('session_id', '')}" + (f" --tokens {tok}" if tok else "")
+           + " <<'FIM' (linhas '1. ...' a '5. ...') FIM")
     return (f"MEDIÇÃO DE RETOMADA (modo {modo}): ANTES de abrir qualquer arquivo ou reler o handoff, responda de memória, "
-            f"uma linha cada, só com o que está no seu contexto agora, e mostre as 5 respostas: {perg} "
-            f"Depois abra {rel} (seção Perguntas-teste e as fontes que ela aponta), marque cada uma como certa ou errada "
-            "(vaga ou 'não sei' = errada) e registre: " + cmd + " . Avise em uma linha 'Nota da retomada: N/5' "
-            "(e o que errou) e só então siga. ")
+            f"uma linha cada, só com o que está no seu contexto agora ('não sei' vale): {perg} "
+            "Mande as 5 respostas direto para o script, que dá a nota pelas chaves do handoff (você não corrige): "
+            + cmd + " . Repita em uma linha a 'Nota da retomada' que o script imprimir e só então siga. ")
 
 
 def subiu_faixa(d, st):
@@ -469,7 +469,8 @@ def ao_limpar(d, raiz):
     rel = snapshot_com_perguntas(raiz)
     if rel:
         texto += (f" Se rodar o prime sobre um handoff com Perguntas-teste (o mais novo é {rel}), registre a nota do passo "
-                  f"6c: python3 {NOTA} --modo prime --acertos <N> --total 5 --snapshot <snapshot lido> --raiz {raiz} "
+                  f"6c mandando as 5 respostas (tiradas dos arquivos de fonte, antes de comparar com o handoff) para o script, "
+                  f"que dá a nota: python3 {NOTA} --modo prime --respostas - --snapshot <snapshot lido> --raiz {raiz} "
                   f"--sessao {d.get('session_id', '')}")
     saida({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": texto}})
 
