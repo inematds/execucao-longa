@@ -550,3 +550,17 @@ def test_pausa_longa_cita_o_automatico_e_nao_repete_a_linha(tmp_path):
     out = a.run("UserPromptSubmit", prompt="oi")
     assert out.get("decision") == "block" and rel in out["reason"]
     assert "Handoff gravado sozinho" not in a.run("UserPromptSubmit", prompt="oi").get("systemMessage", "")
+
+
+def test_pausa_nao_bloqueia_aviso_automatico_nem_headless(monkeypatch):
+    # 13/11/2026: o bloqueio da pausa matou a sessão headless do continua (ia-no-bolso ficou sem publicar)
+    monkeypatch.setattr(hook, "ultima_resposta", lambda t: time.time() - 3 * 3600)
+    monkeypatch.setattr(hook, "uso_contexto", lambda t: (300_000, None))
+    monkeypatch.delenv("CLAUDE_CODE_ENTRYPOINT", raising=False)
+    base = {"hook_event_name": "UserPromptSubmit", "transcript_path": "x", "cwd": "/tmp"}
+    assert hook.pausa({**base, "prompt": "<task-notification>\n<status>completed</status>"}, {}) is None
+    monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "sdk-cli")
+    assert hook.pausa({**base, "prompt": "oi"}, {}) is None
+    monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
+    monkeypatch.setattr(hook, "meu_handoff", lambda t, r: None)
+    assert "cache venceu" in hook.pausa({**base, "prompt": "oi"}, {})

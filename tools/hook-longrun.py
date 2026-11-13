@@ -58,7 +58,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.10.6"
+VERSAO = "1.10.7"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -347,6 +347,12 @@ def conferir_handoff(d, st, raiz):
 def pausa(d, st):
     """Bloqueia UMA vez o primeiro envio depois de uma pausa maior que o cache, se o contexto for grande."""
     if d.get("hook_event_name") != "UserPromptSubmit":
+        return None
+    # 1.10.7: aviso automático (fim de tarefa em segundo plano) e sessão headless (claude -p) não têm
+    # humano para reenviar — bloquear mata a sessão (continua ia-no-bolso, 13/11/2026, ficou sem publicar).
+    if str(d.get("prompt", "")).lstrip().startswith("<task-notification>"):
+        return None
+    if os.environ.get("CLAUDE_CODE_ENTRYPOINT", "").startswith("sdk"):
         return None
     minimo = env_int("LONGRUN_PAUSA_TOKENS", 150_000)
     if not minimo:
