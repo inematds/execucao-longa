@@ -8,6 +8,8 @@ Kit para mantener a un agente (Codex `/goal` o Claude Code `/goal`) trabajando d
 
 📖 Guía visual: **https://inematds.github.io/execucao-longa/guia/es/**
 
+🎬 Video: https://www.youtube.com/watch?v=Jv9QHUQQi0Q
+
 ## En 5 pasos
 
 **1. Crea la carpeta de la ejecución en tu proyecto**

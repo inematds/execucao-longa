@@ -8,6 +8,8 @@ A kit to keep an agent (Codex `/goal` or Claude Code `/goal`) working for hours 
 
 📖 Visual guide: **https://inematds.github.io/execucao-longa/guia/en/**
 
+🎬 Video: https://www.youtube.com/watch?v=Jv9QHUQQi0Q
+
 ## In 5 steps
 
 **1. Create the run folder in your project**
