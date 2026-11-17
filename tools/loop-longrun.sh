@@ -38,6 +38,10 @@ log "início: rápido=$melhor passed · agente=$AGENTE · teto ${MAX_CICLOS}x${M
 
 for ((i = 1; i <= MAX_CICLOS; i++)); do
   log "ciclo $i: começa"
+  # Trava de cota compartilhada (tools/cota.py): conta sem cota → para limpo, sem gastar ciclos.
+  if motivo=$(python3 "$(dirname "$(readlink -f "$0")")/cota.py" "$AGENTE"); then :; else
+    log "PARADO: $motivo — retomar depois desse horário"; exit 75
+  fi
   if [ "$AGENTE" = claude ]; then
     cmd=(claude -p --max-turns 60 --permission-mode acceptEdits)
   else

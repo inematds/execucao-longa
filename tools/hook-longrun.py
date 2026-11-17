@@ -607,6 +607,12 @@ def modo_ocioso(sid, transcript, cwd, ultimo_stop):
     antes = ultimo_handoff(raiz)
     marca = antes.stat().st_mtime if antes else 0
     cmd = os.environ.get("LONGRUN_CLAUDE_CMD")
+    if not cmd:   # trava de cota compartilhada (tools/cota.py): sem cota, nem abre a cópia
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        from cota import travada
+        motivo = travada("claude")
+        if motivo:
+            return log_ocioso(f"{sid[:8]} cópia adiada: {motivo}")
     if cmd:
         args = cmd.split()
     else:
