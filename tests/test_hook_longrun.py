@@ -30,7 +30,8 @@ class Ambiente:
         self.estado = tmp / "estado"
         self.tr = tmp / "t.jsonl"
         self.tr.write_text("")
-        self.env = {"LONGRUN_AGENDAR_ARQ": str(tmp / "agenda.jsonl")}
+        (tmp / "cfg").mkdir(exist_ok=True)
+        self.env = {"LONGRUN_AGENDAR_ARQ": str(tmp / "agenda.jsonl"), "CLAUDE_CONFIG_DIR": str(tmp / "cfg")}
 
     def linhas(self, *regs):
         with open(self.tr, "a") as f:
@@ -41,6 +42,7 @@ class Ambiente:
         d = {"hook_event_name": ev, "cwd": str(self.proj), "session_id": "s1", "transcript_path": str(self.tr), **extra}
         env = {**os.environ, "LONGRUN_ESTADO": str(self.estado), **self.env}
         env.pop("LONGRUN_JANELA", None)
+        env.pop("CLAUDE_CODE_AUTO_COMPACT_WINDOW", None)
         r = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(d), capture_output=True, text=True, env=env, timeout=30)
         assert r.returncode == 0, r.stderr
         return json.loads(r.stdout) if r.stdout.strip() else {}
@@ -314,7 +316,7 @@ def test_decidir_ocioso():
 
 
 def _rodar_ocioso(a, tmp_path, ultimo_stop, stub):
-    env = {**os.environ, "LONGRUN_ESTADO": str(a.estado), "LONGRUN_CLAUDE_CMD": f"{sys.executable} {stub}", "HOME": str(tmp_path)}
+    env = {**os.environ, "LONGRUN_ESTADO": str(a.estado), "LONGRUN_CLAUDE_CMD": f"{sys.executable} {stub}", "HOME": str(tmp_path), "CLAUDE_CONFIG_DIR": str(tmp_path)}
     r = subprocess.run([sys.executable, str(HOOK), "--ocioso", "s1", str(a.tr), str(a.proj), str(ultimo_stop)],
                        capture_output=True, text=True, env=env, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -564,3 +566,19 @@ def test_pausa_nao_bloqueia_aviso_automatico_nem_headless(monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
     monkeypatch.setattr(hook, "meu_handoff", lambda t, r: None)
     assert "cache venceu" in hook.pausa({**base, "prompt": "oi"}, {})
+
+
+def test_janela_das_settings(tmp_path, monkeypatch):
+    """1.11.7: autoCompactWindow das settings (topo e por modelo) vira o ponto de compactação das faixas."""
+    import importlib.util as u
+    sp = u.spec_from_file_location("hk", HOOK); hk = u.module_from_spec(sp); sp.loader.exec_module(hk)
+    for k in ("LONGRUN_TETO", "CLAUDE_CODE_AUTO_COMPACT_WINDOW"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    assert hk.ponto_compactacao(1_000_000, "claude-opus-5-5") == 967_000
+    (tmp_path / "settings.json").write_text(json.dumps({"autoCompactWindow": 400000}))
+    assert hk.ponto_compactacao(1_000_000, "claude-opus-5-5") == 400_000
+    (tmp_path / "settings.json").write_text(json.dumps({"autoCompactWindow": 400000,
+        "modelSettings": {"claude-fable-5-2": {"autoCompactWindow": "300k"}}}))
+    assert hk.ponto_compactacao(1_000_000, "claude-fable-5-2") == 300_000
+    assert hk.ponto_compactacao(1_000_000, "claude-opus-5-5") == 400_000

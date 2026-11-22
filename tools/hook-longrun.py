@@ -58,7 +58,7 @@ O Claude Code grava a transcrição com atraso: o aviso de faixa costuma chegar 
 """
 import datetime, json, os, pathlib, re, subprocess, sys, time
 
-VERSAO = "1.10.7"
+VERSAO = "1.11.7"
 
 ESTADO = pathlib.Path(os.environ.get("LONGRUN_ESTADO", pathlib.Path.home() / ".local/state/execucao-longa/faixas"))
 COBRAR_APOS = 8      # eventos sem handoff antes de cobrar de novo
@@ -127,10 +127,34 @@ def fim_transcricao(transcript, tamanho=2 << 20):
         return [], True
 
 
-def ponto_compactacao(janela):
+def janela_settings(modelo=""):
+    """autoCompactWindow das settings do usuário (1.11.7): modelSettings.<modelo>.autoCompactWindow vence o topo
+    (como no /autocompact). Aceita número ou '400k'/'1M'; 'auto' ou ausente → 0."""
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    try:
+        d = json.load(open(os.path.join(base, "settings.json")))
+    except (OSError, ValueError):
+        return 0
+    v = None
+    for nome, cfg in (d.get("modelSettings") or {}).items():
+        if modelo and isinstance(cfg, dict) and nome.lower() in modelo and "autoCompactWindow" in cfg:
+            v = cfg["autoCompactWindow"]
+    if v is None:
+        v = d.get("autoCompactWindow")
+    s = str(v or "").strip().lower()
+    mult = 1_000 if s.endswith("k") else 1_000_000 if s.endswith("m") else 1
+    try:
+        return int(float(s.rstrip("km")) * mult)
+    except ValueError:
+        return 0
+
+
+def ponto_compactacao(janela, modelo=""):
     """Onde o Claude Code compacta por TAMANHO: LONGRUN_TETO, senão CLAUDE_CODE_AUTO_COMPACT_WINDOW (documentado,
-    100 mil..janela), senão ~96,7% da janela (doc: "about 967K tokens on native 1M models")."""
-    teto = env_int("LONGRUN_TETO", 0) or env_int("CLAUDE_CODE_AUTO_COMPACT_WINDOW", 0)
+    100 mil..janela), senão autoCompactWindow das settings, senão ~96,7% da janela (doc: "about 967K tokens on
+    native 1M models")."""
+    teto = (env_int("LONGRUN_TETO", 0) or env_int("CLAUDE_CODE_AUTO_COMPACT_WINDOW", 0)
+            or janela_settings(modelo))
     if teto:
         return max(100_000, min(teto, janela))
     return janela * 967 // 1000
@@ -151,7 +175,7 @@ def uso_contexto(transcript):
             tok = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
             modelo = (m.get("model") or "").lower()
             janela = env_int("LONGRUN_JANELA", 0) or (200_000 if "haiku" in modelo and tok <= 200_000 else 1_000_000)
-            return tok, ponto_compactacao(janela)
+            return tok, ponto_compactacao(janela, modelo)
         if inteiro:
             break
     return 0, 0
