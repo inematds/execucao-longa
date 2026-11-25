@@ -10,7 +10,7 @@
 #   PROTEGIDOS="tests/ pytest.ini"            # se o agente mexer, é revertido e o ciclo conta como falho
 #   PERMITIDOS="tools/medir-sessao.py"        # o que entra no commit de checkpoint (além da pasta longrun)
 #   MAX_CICLOS=6  MIN_CICLO=20  MEM=8G  ESTAGNACAO=3
-#   AGENTE=codex  MODELO=gpt-6-astra          # AGENTE=claude usa `claude -p --max-turns 60` (ainda não testado)
+#   AGENTE=codex  MODELO=<padrão: INEMA_CODEX_EXECUTOR>         # AGENTE=claude usa `claude -p --max-turns 60` (ainda não testado)
 #   CODEX_ARGS="-c sandbox_workspace_write.network_access=true"  # se os testes sobem servidor local:
 #                                             # o sandbox workspace-write bloqueia até socket em 127.0.0.1
 # Progresso = nº de testes RÁPIDOS passando. Se o que falta está só no teste final (lento), cada ciclo
@@ -22,7 +22,8 @@ repo=$(git -C "$dir" rev-parse --show-toplevel)
 source "$dir/loop.env"
 : "${TESTE_RAPIDO:?} ${TESTE_FINAL:?} ${PROTEGIDOS:?} ${PERMITIDOS:?}"
 MAX_CICLOS=${MAX_CICLOS:-6}; MIN_CICLO=${MIN_CICLO:-20}; MEM=${MEM:-8G}; ESTAGNACAO=${ESTAGNACAO:-3}
-AGENTE=${AGENTE:-codex}; MODELO=${MODELO:-gpt-6-astra}
+[ -f "$HOME/.config/inema/modelos.env" ] && . "$HOME/.config/inema/modelos.env"  # fonte única dos modelos
+AGENTE=${AGENTE:-codex}; MODELO=${MODELO:-${INEMA_CODEX_EXECUTOR:-gpt-6.2-sol}}; ESFORCO=${ESFORCO:-${INEMA_CODEX_EXECUTOR_EFFORT:-medium}}
 CODEX=${CODEX_BIN:-$HOME/.npm-global/bin/codex}
 
 exec 9>"$dir/.loop.lock"
@@ -46,7 +47,7 @@ for ((i = 1; i <= MAX_CICLOS; i++)); do
     cmd=(claude -p --max-turns 60 --permission-mode acceptEdits)
   else
     # shellcheck disable=SC2206
-    cmd=("$CODEX" exec -m "$MODELO" -s workspace-write ${CODEX_ARGS:-} --skip-git-repo-check -C "$repo" -)
+    cmd=("$CODEX" exec -m "$MODELO" -c model_reasoning_effort="\"$ESFORCO\"" -s workspace-write ${CODEX_ARGS:-} --skip-git-repo-check -C "$repo" -)
   fi
   t0=$(date +%s)
   timeout "${MIN_CICLO}m" systemd-run --user --scope -q -p MemoryMax="$MEM" "${cmd[@]}" \
